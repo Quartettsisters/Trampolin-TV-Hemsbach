@@ -183,7 +183,7 @@ async function loadAll() {
   S.wlInv = {};
   if (can('registrations_view') && can('waitlist_view')) {
     const gq = await sb.from('session_guests').select('waitlist_id, confirmed, sessions(starts_at)').not('waitlist_id', 'is', null);
-    (gq.data || []).forEach((x) => { if (x.sessions && (x.confirmed === false || new Date(x.sessions.starts_at) > new Date())) { const a = (S.wlInv[x.waitlist_id] ||= []); if (!a.includes(x.sessions.starts_at)) a.push(x.sessions.starts_at); } });
+    (gq.data || []).forEach((x) => { if (x.sessions && (new Date(x.sessions.starts_at) > new Date())) { const a = (S.wlInv[x.waitlist_id] ||= []); if (!a.includes(x.sessions.starts_at)) a.push(x.sessions.starts_at); } });
     Object.values(S.wlInv).forEach((a) => a.sort());
     const ml = await sb.from('mail_log').select('waitlist_id, subject, sent_at').order('sent_at', { ascending: false });
     (ml.data || []).forEach((m) => { (S.mailLog[m.waitlist_id] ||= []).push(m); });
@@ -235,10 +235,10 @@ async function inviteFlow(w) {
   const ids = await pickSessions(nm);
   if (!ids) return false;
   if (can('registrations_manage')) await sb.from('session_guests').delete().eq('waitlist_id', w.id).eq('confirmed', false);
-  if (can('registrations_manage')) ok(await sb.from('session_guests').insert(ids.map((id) => ({ session_id: id, name: nm, waitlist_id: w.id, confirmed: false }))));
+  if (can('registrations_manage')) ok(await sb.from('session_guests').insert(ids.map((id) => ({ session_id: id, name: nm, waitlist_id: w.id }))));
   const first = S.sessions.filter((x) => ids.includes(x.id)).map((x) => x.starts_at).sort()[0];
   ok(await sb.from('waitlist').update({ status: 'invited', trial: true, trial_on: first ? dkey(first) : null }).eq('id', w.id));
-  toast('Eingeladen');
+  toast('Eingeladen und bei beiden Terminen eingetragen');
   return true;
 }
 
@@ -491,7 +491,7 @@ TV Hemsbach`;
 
 Zum Training werden Socken/Schläppchen, Sportkleidung (elastische Hose ohne Bänder oder Reißverschlüsse), (bei langen Haaren) ein Haargummi und eine Trinkflasche benötigt.`;
   if (kind === 'trial') {
-    const first = inv.length ? `Ein erstes Schnuppertraining ist am ${inv.map(fmtS).join(' oder am ')} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
+    const first = inv.length > 1 ? `Die ersten beiden Schnuppertrainings sind am ${inv.map(fmtS).join(' und am ')} möglich.` : inv.length ? `Ein erstes Schnuppertraining ist am ${fmtS(inv[0])} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
     return `Liebe Eltern,
 
 ${first}
@@ -506,7 +506,7 @@ Bitte gebt uns eine kurze Rückmeldung, ob Interesse besteht.
 
 ${sign}`;
   }
-  const first = inv.length ? `Ein erstes Schnuppertraining ist am ${inv.map(fmtD).join(' oder am ')} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
+  const first = inv.length > 1 ? `Die ersten beiden Schnuppertrainings sind am ${inv.map(fmtD).join(' und am ')} möglich.` : inv.length ? `Ein erstes Schnuppertraining ist am ${fmtD(inv[0])} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
   return `Liebe Eltern,
 
 wir freuen uns, euch in unserem Training ${day} von 17:30-20 Uhr einen Platz anbieten zu können.
@@ -528,7 +528,7 @@ function wlList() {
     const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
       ${S.mailLog?.[w.id]?.length ? `<p class="small muted">Zuletzt gemailt: ${esc(fmtDate(S.mailLog[w.id][0].sent_at))} (${esc(S.mailLog[w.id][0].subject)})</p>` : ''}
-      ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' oder ')} Uhr</p>` : ''}
+      ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
       ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="trial">Mail senden</button>` : ''}</div>${w.trial_done ? `<div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="offer">Mail senden</button>` : ''}</div>` : '<p class="small muted" style="margin-top:8px">Platzangebot erst möglich, wenn das Kind beim Schnuppern war.</p>'}` : ''}
       ${can('waitlist_manage') ? `<label class="line"><input type="checkbox" data-a="trialDone" data-id="${w.id}" ${w.trial_done ? 'checked' : ''}> War beim Schnuppern da</label>` : ''}
