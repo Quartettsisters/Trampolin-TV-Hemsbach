@@ -25,6 +25,24 @@ const ok = (r) => { if (r.error) throw r.error; return r.data; };
 // Weihnachtsferien Baden-Württemberg (Quelle: Kultusministerium BW); in diesem Zeitraum findet kein Training statt
 const XMAS = [['2026-12-23', '2027-01-09'], ['2027-12-23', '2028-01-08'], ['2028-12-23', '2029-01-05'], ['2029-12-22', '2030-01-05']];
 const inXmas = (ds) => XMAS.some(([a, b]) => ds >= a && ds <= b);
+const IC = {
+  cal: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  users: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M16 5.5a3 3 0 010 6M17.5 14.3c2 .6 3.5 2.4 3.5 5.7"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/>',
+  chat: '<path d="M4 5.5h16v10H9.5L5 19.5v-4H4z"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  user: '<circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c0-4 3.4-6.2 7.5-6.2s7.5 2.2 7.5 6.2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  key: '<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21M17 12v3M20 12v2.5"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  phone: '<path d="M6.5 4h3l1.5 4-2 1.3a10 10 0 005.7 5.7L16 13l4 1.5v3a2 2 0 01-2 2A14 14 0 014.5 6a2 2 0 012-2z"/>',
+  mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/>',
+  cake: '<path d="M4 20h16v-7H4zM4 15.5c2 1.5 4 1.5 6 0s4-1.5 6 0 2.5 1 4 0M12 13V9M12 6.5v.01"/>',
+  share: '<path d="M12 15V4M8 8l4-4 4 4M6 11H5v9h14v-9h-1"/>',
+  phoneapp: '<rect x="7" y="3" width="10" height="18" rx="2.2"/><path d="M11 18h2"/>',
+};
+const ic = (n, c = '') => `<svg class="ic ${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 const DAY = { tue: 'Dienstag', fri: 'Freitag', all: 'Alle Gruppen' };
 const inGroup = (k, g) => (g === 'all' ? k.tue || k.fri : g === 'tue' ? k.tue : k.fri);
 const STATUS = { waiting: 'Wartet', invited: 'Eingeladen', accepted: 'Zugesagt', declined: 'Abgesagt', no_reply: 'Keine Rückmeldung' };
@@ -80,12 +98,12 @@ function renderInstall() {
     inner = '<p style="margin:6px 0">Mit einem Tipp aufs Handy holen, dann ist sie immer sofort da.</p><button class="btn" data-i="install">Jetzt als App installieren</button>';
   } else if (isIOS) {
     inner = `<ol><li>Öffne diesen Link in <b>Safari</b> (falls du ihn aus WhatsApp geöffnet hast: unten rechts auf das Kompass-Symbol tippen)</li>
-      <li>Tippe unten auf das <b>Teilen-Symbol</b> <span class="ico">⬆</span> (Quadrat mit Pfeil)</li>
+      <li>Tippe unten auf das <b>Teilen-Symbol</b> <span class="ico">${ic('share')}</span> (Quadrat mit Pfeil)</li>
       <li>Wähle <b>„Zum Home-Bildschirm“</b> und dann <b>„Hinzufügen“</b></li></ol>`;
   } else {
     inner = `<ol><li>Tippe oben rechts auf die <b>drei Punkte ⋮</b></li><li>Wähle <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b></li></ol>`;
   }
-  el.innerHTML = `<div class="inst"><b>📲 Als App aufs Handy holen</b>${inner}<p class="small" style="margin:6px 0;color:#ccc">Schon installiert? Dann öffne die App über das Symbol auf deinem Startbildschirm, nicht über den Link.</p>
+  el.innerHTML = `<div class="inst"><b>Als App aufs Handy holen</b>${inner}<p class="small" style="margin:6px 0;color:#ccc">Schon installiert? Dann öffne die App über das Symbol auf deinem Startbildschirm, nicht über den Link.</p>
     <button class="link" data-i="have">Habe ich schon</button> <button class="link" data-i="later">Später</button></div>`;
 }
 $('#install').addEventListener('click', async (e) => {
@@ -198,7 +216,7 @@ function render() {
 
 function viewMore() {
   const row = (t, i, l) => `<button class="mrow-btn" data-a="tab" data-t="${t}"><span>${i}</span>${l}<em>›</em></button>`;
-  return `<div class="list">${can('sessions_manage') ? row('neu', '➕', 'Trainings anlegen') : ''}${can('users_manage') ? row('nutzer', '🔑', 'Team & Rollen') : ''}${row('profil', '👤', 'Mein Profil')}</div>`;
+  return `<div class="list">${can('sessions_manage') ? row('neu', ic('plus'), 'Trainings anlegen') : ''}${can('users_manage') ? row('nutzer', ic('key'), 'Team & Rollen') : ''}${row('profil', ic('user'), 'Mein Profil')}</div>`;
 }
 
 function viewInvite() {
@@ -235,12 +253,12 @@ function viewLogin() {
 function viewMain() {
   const more = can('sessions_manage') || can('users_manage');
   const tabs = [
-    ['termine', '📅', 'Termine', true],
-    ['kinder', '👥', 'Mitglieder', can('kids_manage') || can('kids_view')],
-    ['interessenten', '⏳', 'Warteliste', can('waitlist_view')],
-    ['news', '💬', 'News', true],
-    ['mehr', '☰', 'Mehr', more],
-    ['profil', '👤', 'Profil', !more],
+    ['termine', ic('cal'), 'Termine', true],
+    ['kinder', ic('users'), 'Mitglieder', can('kids_manage') || can('kids_view')],
+    ['interessenten', ic('clock'), 'Warteliste', can('waitlist_view')],
+    ['news', ic('chat'), 'News', true],
+    ['mehr', ic('menu'), 'Mehr', more],
+    ['profil', ic('user'), 'Profil', !more],
   ].filter((t) => t[3]);
   const sub = more ? ['neu', 'nutzer', 'profil'] : [];
   if (!tabs.some((t) => t[0] === S.tab) && !sub.includes(S.tab)) S.tab = 'termine';
@@ -326,7 +344,7 @@ function viewCalendar() {
     const cells = Array.from({ length: total }, (_, i) => new Date(y, m, 1 - off + i)).map((d) => {
       const k = dkey(d);
       const chips = (by[k] || []).map((s) => `<div class="cs${s.cancelled ? ' x' : ''}">${esc(s.title)}</div>`).join('');
-      const bd = bdaysOn(d).map((x) => `<div class="bd">🎂 ${esc(x.name.split(' ')[0])}</div>`).join('');
+      const bd = bdaysOn(d).map((x) => `<div class="bd">${ic('cake')} ${esc(x.name.split(' ')[0])}</div>`).join('');
       return `<div class="cd ${d.getMonth() !== m ? 'oth' : ''} ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><span class="dn">${d.getDate()}</span>${chips}${bd}</div>`;
     }).join('');
     grid = `<div class="cal">${WD.map((w) => `<div class="cw">${w}</div>`).join('')}${cells}</div>`;
@@ -334,7 +352,7 @@ function viewCalendar() {
     grid = Array.from({ length: 7 }, (_, i) => new Date(wk0.getFullYear(), wk0.getMonth(), wk0.getDate() + i)).map((d) => {
       const k = dkey(d);
       const ss = (by[k] || []).map((s) => `<div class="cs wide${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''} ${esc(s.title)} · ${DAY[s.grp]}${s.cancelled ? ' (abgesagt)' : ''}</div>`).join('');
-      const bd = bdaysOn(d).map((x) => `<div class="bd">🎂 ${esc(x.name)}</div>`).join('');
+      const bd = bdaysOn(d).map((x) => `<div class="bd">${ic('cake')} ${esc(x.name)}</div>`).join('');
       return `<div class="wrow ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><b>${WD[(d.getDay() + 6) % 7]} ${d.getDate()}.${d.getMonth() + 1}.</b><div>${ss || '<span class="muted small">–</span>'}${bd}</div></div>`;
     }).join('');
   }
@@ -345,7 +363,7 @@ function viewCalendar() {
 }
 
 function viewTermine() {
-  const seg = `<div class="chips"><button class="chip ${S.termView === 'cal' ? 'on' : ''}" data-a="termView" data-v="cal">📅 Kalender</button><button class="chip ${S.termView === 'list' ? 'on' : ''}" data-a="termView" data-v="list">☰ Liste</button></div>`;
+  const seg = `<div class="chips"><button class="chip ${S.termView === 'cal' ? 'on' : ''}" data-a="termView" data-v="cal">Kalender</button><button class="chip ${S.termView === 'list' ? 'on' : ''}" data-a="termView" data-v="list">Liste</button></div>`;
   return seg + (S.termView === 'cal' ? viewCalendar() : viewTermineList());
 }
 
@@ -359,14 +377,14 @@ function detailTrainer(s) {
   const btn = (k, v, on, ic) => `<button class="rb ${on ? (v === 'yes' ? 'yes' : 'no') : ''}" ${mg ? `data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="${v}"` : 'disabled'}>${ic}</button>`;
   const row = (k, going) => `<div class="prow">${avatar()}<span class="pn">${esc(k.name)}</span>
     ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
-    ${btn(k, 'yes', going, '👍')}${btn(k, 'no', !going, '👎')}</div>`;
+    ${btn(k, 'yes', going, ic('check'))}${btn(k, 'no', !going, ic('x'))}</div>`;
   const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="setGrp" data-s="${s.id}" data-v="${s.grp === 'all' ? (new Date(s.starts_at).getDay() === 5 ? 'fri' : 'tue') : 'all'}">${s.grp === 'all' ? 'Nur ' + (new Date(s.starts_at).getDay() === 5 ? 'Freitag' : 'Dienstag') : 'Für beide Gruppen öffnen'}</button><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
   const gl = S.guests[s.id] || [];
   const wl = (S.waitlist || []).filter((w) => ['waiting', 'invited'].includes(w.status));
   const guestBox = `<div class="sh"><span>Schnupperkinder</span><b>${gl.length}</b></div>
     ${gl.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${mg ? `<button class="link danger" data-a="delGuest" data-s="${s.id}" data-g="${g.id}">Löschen</button>` : ''}</div>`).join('')}
     ${mg ? `<form data-f="newGuest" class="inline"><input type="hidden" name="s" value="${s.id}"><label>Name<input name="name" list="wl-${s.id}" placeholder="Name oder aus Warteliste wählen" required autocomplete="off"></label>
-      <datalist id="wl-${s.id}">${wl.map((w) => `<option value="${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}">`).join('')}</datalist><button class="btn">＋</button></form>` : ''}`;
+      <datalist id="wl-${s.id}">${wl.map((w) => `<option value="${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}">`).join('')}</datalist><button class="btn">+</button></form>` : ''}`;
   return `<div class="sdetail">
     <div class="sh"><span>Zugesagt</span><b>${inn.length}</b></div>${inn.map((k) => row(k, true)).join('') || '<p class="muted small">Niemand</p>'}
     <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}${guestBox}${manage}</div>`;
@@ -402,7 +420,7 @@ function wlList() {
       ${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}<br>
       <span class="small muted">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}</span></div>
       <div>${w.tue ? '<span class="badge gray">Di</span>' : ''}${w.fri ? '<span class="badge gray">Fr</span>' : ''}${w.trial ? '<span class="badge green">Schnuppern</span>' : ''}</div></div>
-    <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">✉️ ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">📞 ${esc(w.phone)}</a>` : ''}</div>
+    <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
     ${w.note ? `<p class="note">${esc(w.note)}</p>` : ''}
     ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <button class="btn small ghost" data-a="wlNote" data-id="${w.id}">Notiz</button>
@@ -437,7 +455,7 @@ function viewUsers() {
   const last = S.lastInvite ? `<div class="note"><b>Einladung für ${esc(S.lastInvite.label)}</b><p class="small break">${esc(S.lastInvite.link)}</p>
     <div class="btns"><a class="btn" target="_blank" rel="noopener" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Hallo ${S.lastInvite.label}! Hier ist dein Zugang zur Trampolin-App vom TV Hemsbach. Link öffnen und auf „Einladung annehmen“ tippen (7 Tage gültig, nur für dich):\n${S.lastInvite.link}`)}`)}">Per WhatsApp senden</a>
     <button class="btn ghost" data-a="copyText" data-t="${esc(S.lastInvite.link)}">Link kopieren</button></div></div>` : '';
-  const open = S.invites.map((i) => `<div class="line">${esc(i.label)} · ${esc(S.roles.find((r) => r.id === i.role_id)?.name || '')} <span class="small muted">bis ${fmtDate(i.expires_at)}</span><button class="x" data-a="delInvite" data-id="${i.id}" title="Zurückziehen">✕</button></div>`).join('');
+  const open = S.invites.map((i) => `<div class="line">${esc(i.label)} · ${esc(S.roles.find((r) => r.id === i.role_id)?.name || '')} <span class="small muted">bis ${fmtDate(i.expires_at)}</span><button class="x" data-a="delInvite" data-id="${i.id}" title="Zurückziehen">${ic('x')}</button></div>`).join('');
   const roles = S.roles.map((r) => `<details class="card"><summary><b>${esc(r.name)}</b>${r.is_system ? ' <span class="badge gray">fest</span>' : ''}</summary>
     ${Object.entries(PERMS).map(([k, l]) => `<label class="line"><input type="checkbox" data-a="togglePerm" data-id="${r.id}" data-p="${k}" ${r.perms?.[k] ? 'checked' : ''} ${r.is_system ? 'disabled' : ''}> ${esc(l)}</label>`).join('')}
     ${r.is_system ? '' : `<button class="link" data-a="delRole" data-id="${r.id}">Rolle löschen</button>`}</details>`).join('');
@@ -468,7 +486,7 @@ function viewKids() {
   const chips = [['all', `Alle (${act.length})`], ['tue', `Dienstag (${act.filter((k) => k.tue).length})`], ['fri', `Freitag (${act.filter((k) => k.fri).length})`], ['off', `Inaktiv (${all.length - act.length})`]]
     .map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-a="kidFilter" data-v="${k}">${l}</button>`).join('');
   const canPhone = mg || can('registrations_view');
-  const toggle = canPhone ? `<button class="chip ${S.kidView === 'phones' ? 'on' : ''}" data-a="kidView" data-v="${S.kidView === 'phones' ? 'list' : 'phones'}">📞 Telefonliste</button>` : '';
+  const toggle = canPhone ? `<button class="chip ${S.kidView === 'phones' ? 'on' : ''}" data-a="kidView" data-v="${S.kidView === 'phones' ? 'list' : 'phones'}">Telefonliste</button>` : '';
   if (S.kidView === 'phones' && canPhone) {
     const tbl = list.map((k) => `<tr><td><b>${esc(k.name)}</b> ${kidTags(k)}</td><td>${phoneLinks(k)}</td></tr>`).join('');
     return `<div class="card"><h2>Telefonliste</h2><div class="chips">${chips}${toggle}</div>
@@ -476,14 +494,14 @@ function viewKids() {
   }
   const rows = list.map((k) => {
     const g = S.guardCount[k.id] || 0;
-    const sub = [mg ? (g ? `<span>✓ Eltern verknüpft${g > 1 ? ` (${g})` : ''}</span>` : '<span>✕ Keine Eltern verknüpft</span>') : '',
-      S.activity[k.id] ? `<span>★ ${S.activity[k.id]} Aktivität</span>` : '',
+    const sub = [mg ? (g ? `<span>${ic('check')} Eltern verknüpft${g > 1 ? ` (${g})` : ''}</span>` : `<span class="warn">${ic('x')} Keine Eltern verknüpft</span>`) : '',
+      S.activity[k.id] ? `<span>${S.activity[k.id]} Aktivität</span>` : '',
       !k.tue && !k.fri ? '<span class="warn">Trainingstag fehlt</span>' : ''].filter(Boolean).join(' ');
     const open = mg && S.openKid === k.id;
     return `<div class="mrow"><div class="mmain ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
       <div class="minfo"><div><b>${esc(k.name)}</b> ${kidTags(k)}</div><div class="msub">${sub}</div></div>${mg ? '<span class="chev">›</span>' : ''}</div>
       ${open ? `<div class="mdetail"><div class="btns"><button class="chip ${k.tue ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="tue">Dienstag</button><button class="chip ${k.fri ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="fri">Freitag</button></div>
-        <p class="small">${k.phone ? `📞 ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}<br>${k.birthdate ? `🎂 ${fmtDate(k.birthdate)} (${ageOf(k.birthdate)} Jahre)` : '<span class="muted">Kein Geburtstag eingetragen</span>'}</p>
+        <p class="small">${k.phone ? `${ic('phone')} ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}<br>${k.birthdate ? `${ic('cake')} ${fmtDate(k.birthdate)} (${ageOf(k.birthdate)} Jahre)` : '<span class="muted">Kein Geburtstag eingetragen</span>'}</p>
         <div class="btns"><button class="btn small ghost" data-a="kidPhone" data-id="${k.id}">Telefon ändern</button>
         <button class="btn small ghost" data-a="kidBirthday" data-id="${k.id}">Geburtstag</button>
         <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Inaktiv setzen' : 'Wieder aktivieren'}</button></div></div>` : ''}</div>`;
@@ -527,7 +545,7 @@ const A = {
     }
     const role = ok(await sb.rpc('redeem_staff_invite', { p_token: S.invite }));
     history.replaceState(null, '', location.pathname + (S.code ? `?c=${S.code}` : ''));
-    S.invite = null; await afterLogin(); S.tab = 'termine'; render(); toast(`Willkommen im Team (${role}) ✔`);
+    S.invite = null; await afterLogin(); S.tab = 'termine'; render(); toast(`Willkommen im Team (${role})`);
   },
   async delInvite(d) { ok(await sb.from('staff_invites').delete().eq('id', d.id)); await loadAll(); render(); },
   async pickKid(d) {
@@ -537,7 +555,7 @@ const A = {
       S.user = data.user;
     }
     ok(await sb.rpc('claim_kid', { p_kid: d.id, p_code: S.code }));
-    await afterLogin(); S.tab = 'termine'; render(); toast(`${d.name} ist verknüpft ✔`);
+    await afterLogin(); S.tab = 'termine'; render(); toast(`${d.name} ist verknüpft`);
   },
   toLogin() { S.login = { step: 'email', email: '', kid: null }; S.view = 'login'; render(); },
   toEmail() { S.login.step = 'email'; render(); },
@@ -545,7 +563,7 @@ const A = {
   tab(d) { S.tab = d.t; render(); },
   async answer(d) {
     const r = ok(await sb.rpc('set_response', { p_session: d.s, p_kid: d.k, p_answer: d.v }));
-    toast(r === 'going' ? 'Dabei ✔' : r === 'declined' ? 'Abgesagt' : 'Aktualisiert');
+    toast(r === 'going' ? 'Dabei' : r === 'declined' ? 'Abgesagt' : 'Aktualisiert');
     await refreshSessions();
   },
   async toggle(d) { S.open = S.open === d.s ? null : d.s; if (S.open) await loadDetail(S.open); render(); },
@@ -615,7 +633,7 @@ const A = {
     const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const j = sub.toJSON();
     ok(await sb.from('push_subscriptions').upsert({ user_id: S.user.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' }));
-    toast('Benachrichtigungen aktiv ✔');
+    toast('Benachrichtigungen aktiv');
   },
   async setRole(d, el) { ok(await sb.rpc('set_user_role', { p_user: d.u, p_role: el.value })); await loadAll(); render(); toast('Rolle geändert'); },
   async togglePerm(d, el) {
