@@ -207,7 +207,7 @@ async function loadActivity() {
   S.activity = {};
   if (!can('registrations_view')) return;
   const since = new Date(Date.now() - 120 * 864e5).toISOString();
-  const ses = ok(await sb.from('sessions').select('id,grp').eq('cancelled', false).lt('starts_at', new Date().toISOString()).gte('starts_at', since).order('starts_at', { ascending: false }));
+  const ses = ok(await sb.from('sessions').select('id,grp').eq('cancelled', false).eq('kind', 'training').lt('starts_at', new Date().toISOString()).gte('starts_at', since).order('starts_at', { ascending: false }));
   if (!ses.length) return;
   const regs = ok(await sb.from('registrations').select('kid_id,session_id,attended').in('session_id', ses.map((x) => x.id)));
   const checked = new Set(regs.filter((r) => r.attended).map((r) => r.session_id)); // Trainings, bei denen Anwesenheit erfasst wurde
@@ -410,8 +410,8 @@ function sessionHead(s) {
   const c = S.counts[s.id] || { going: 0 };
   const d = new Date(s.starts_at);
   const wd = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
-  return `<div class="srow ${s.grp}${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
-    <div class="sinfo"><div><b>${esc(s.title)}</b>${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}</div>
+  return `<div class="srow ${s.grp}${s.kind === 'event' ? ' event' : ''}${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
+    <div class="sinfo"><div><b>${esc(s.title)}</b>${s.kind === 'event' ? ' <span class="badge blue">Termin</span>' : ''}${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}</div>
     <div class="muted small">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.grp === 'all' ? ' · Alle Gruppen' : ''}${s.location ? ' · ' + esc(s.location) : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div>
     ${can('registrations_view') ? `<div class="scount"><b>${c.going}</b><small>dabei</small></div>` : ''}</div>`;
 }
@@ -425,9 +425,9 @@ function visibleSessions() {
 function sessionCardParent(s) {
   const rows = S.myKids.filter((k) => inGroup(k, s.grp)).map((k) => {
     const r = S.regs.find((x) => x.session_id === s.id && x.kid_id === k.id);
-    const st = r?.status || 'going';
+    const st = r?.status || (s.signup ? 'open' : 'going');
     const badge = st === 'going' ? '<span class="badge green">Dabei</span>'
-      : '<span class="badge red">Abgesagt</span>';
+      : st === 'open' ? '<span class="badge gray">Noch offen</span>' : '<span class="badge red">Abgesagt</span>';
     const btns = s.cancelled ? '' : `<div class="btns">
       <button class="btn ${st === 'going' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">Zusagen</button>
       <button class="btn ghost ${st === 'declined' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="no">Absagen</button></div>`;
@@ -511,22 +511,26 @@ function detailTrainer(s) {
   const mg = can('registrations_manage'), att = can('attendance_manage') && new Date(s.starts_at) <= new Date();
   const kids = S.allKids.filter((k) => k.active && inGroup(k, s.grp));
   const reg = (k) => regs.find((r) => r.kid_id === k.id);
-  const out = kids.filter((k) => reg(k)?.status === 'declined'), inn = kids.filter((k) => reg(k)?.status !== 'declined');
+  const out = kids.filter((k) => reg(k)?.status === 'declined');
+  const inn = kids.filter((k) => (s.signup ? reg(k)?.status === 'going' : reg(k)?.status !== 'declined'));
+  const open = s.signup ? kids.filter((k) => !reg(k)) : [];
   const btn = (k, v, on, ic) => `<button class="rb ${on ? (v === 'yes' ? 'yes' : 'no') : ''}" ${mg ? `data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="${v}"` : 'disabled'}>${ic}</button>`;
-  const row = (k, going) => `<div class="prow">${avatar()}<span class="pn">${esc(k.name)}</span>
+  const row = (k, going, pending) => `<div class="prow">${avatar()}<span class="pn">${esc(k.name)}</span>
     ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
-    ${btn(k, 'yes', going, ic('check'))}${btn(k, 'no', !going, ic('x'))}</div>`;
+    ${btn(k, 'yes', going, ic('check'))}${btn(k, 'no', !going && !pending, ic('x'))}</div>`;
   const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="setGrp" data-s="${s.id}" data-v="${s.grp === 'all' ? (new Date(s.starts_at).getDay() === 5 ? 'fri' : 'tue') : 'all'}">${s.grp === 'all' ? 'Nur ' + (new Date(s.starts_at).getDay() === 5 ? 'Freitag' : 'Dienstag') : 'Für beide Gruppen öffnen'}</button><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
   const gl = (S.guests[s.id] || []).filter((g) => g.confirmed !== false), offers = (S.guests[s.id] || []).filter((g) => g.confirmed === false);
   const wl = (S.waitlist || []).filter((w) => ['waiting', 'invited'].includes(w.status));
+  const noteBox = can('sessions_manage') ? `<label style="display:block;margin-top:12px">Hinweis zum Termin (für alle sichtbar)<textarea rows="3" data-a="sessNote" data-s="${s.id}" placeholder="z. B. Treffpunkt, Mitbringen, Ablauf. Wird automatisch gespeichert">${esc(s.note || '')}</textarea></label>` : '';
   const guestBox = `<div class="sh"><span>Schnupperkinder</span><b>${gl.length}</b></div>
     ${gl.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${att ? `<label class="att"><input type="checkbox" data-a="guestAttend" data-g="${g.id}" ${g.attended ? 'checked' : ''}> da</label>` : ''}${mg ? `<button class="link danger" data-a="delGuest" data-s="${s.id}" data-g="${g.id}">Löschen</button>` : ''}</div>`).join('')}
     ${offers.length ? `<div class="sh"><span>Eingeladen, Antwort offen</span><b>${offers.length}</b></div>${offers.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${mg ? `<button class="btn small" data-a="confirmGuest" data-s="${s.id}" data-g="${g.id}">Kommt zu diesem Termin</button><button class="x" data-a="delGuest" data-s="${s.id}" data-g="${g.id}" title="Entfernen">${ic('x')}</button>` : ''}</div>`).join('')}` : ''}
     ${mg ? `<form data-f="newGuest" class="inline"><input type="hidden" name="s" value="${s.id}"><label>Name<input name="name" list="wl-${s.id}" placeholder="Name oder aus Warteliste wählen" required autocomplete="off"></label>
       <datalist id="wl-${s.id}">${wl.map((w) => `<option value="${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}">`).join('')}</datalist><button class="btn">+</button></form>` : ''}`;
   return `<div class="sdetail">
-    <div class="sh"><span>Zugesagt</span><b>${inn.length}</b></div>${inn.map((k) => row(k, true)).join('') || '<p class="muted small">Niemand</p>'}
-    <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}${guestBox}${manage}</div>`;
+    <div class="sh"><span>${s.signup ? 'Zugesagt (Anmeldung nötig)' : 'Zugesagt'}</span><b>${inn.length}</b></div>${inn.map((k) => row(k, true)).join('') || '<p class="muted small">Niemand</p>'}
+    <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}
+    ${s.signup ? `<div class="sh"><span>Noch keine Antwort</span><b>${open.length}</b></div>${open.map((k) => row(k, false, true)).join('') || '<p class="muted small">Niemand</p>'}` : ''}${guestBox}${noteBox}${manage}</div>`;
 }
 
 function viewNew() {
@@ -538,12 +542,13 @@ function viewNew() {
     <label>Ort<input name="location"></label>
     <label class="line"><input type="checkbox" name="skipXmas" checked> Baden-Württembergische Weihnachtsferien auslassen (23.12.–09.01.)</label>
     <button class="btn big">Anlegen</button></form></div>
-    <details class="card"><summary>Einzelner Termin (anderer Tag, Zusatztraining)</summary><form data-f="newSession">
-    <label>Titel<input name="title" value="Training" required></label>
-    <label>Gruppe<select name="grp"><option value="tue">Dienstag</option><option value="fri">Freitag</option><option value="all">Beide Gruppen</option></select></label>
+    <div class="card"><h2>Sondertermin</h2><p class="small muted">Für Wettkämpfe, Feiern, Zusatztrainings oder andere Tage.</p><form data-f="newSession">
+    <label>Art<select name="kind"><option value="event">Wettkampf / Veranstaltung (Eltern melden an)</option><option value="training">Zusatztraining (alle Kinder der Gruppe dabei)</option></select></label>
+    <label>Titel<input name="title" placeholder="z. B. Wettkampf in Mannheim" required></label>
+    <label>Für wen<select name="grp"><option value="all">Beide Gruppen</option><option value="tue">Nur Dienstag-Gruppe</option><option value="fri">Nur Freitag-Gruppe</option></select></label>
     <label>Datum<input name="date" type="date" required></label>
-    <label>Beginn<input name="start" type="time" value="17:30" required></label><label>Ende<input name="end" type="time" value="20:00" required></label>
-    <label>Ort<input name="location"></label><label>Hinweis<input name="note"></label><button class="btn big">Anlegen</button></form></details>`;
+    <label>Beginn<input name="start" type="time" value="09:00" required></label><label>Ende (optional)<input name="end" type="time"></label>
+    <label>Ort<input name="location"></label><label>Hinweis<textarea name="note" rows="3" placeholder="Treffpunkt, Mitbringen, Kosten …"></textarea></label><button class="btn big">Anlegen</button></form></div>`;
 }
 
 const wlOrder = (a, b) => (a.requested_on || '9999').localeCompare(b.requested_on || '9999') || String(a.created_at).localeCompare(String(b.created_at));
@@ -819,6 +824,12 @@ const A = {
   },
   async toggle(d) { S.open = S.open === d.s ? null : d.s; if (S.open) await loadDetail(S.open); render(); },
   async attend(d, el) { ok(await sb.rpc('set_attended', { p_session: d.s, p_kid: d.k, p_attended: el.checked })); },
+  async sessNote(d, el) {
+    const v = el.value.trim() || null;
+    ok(await sb.from('sessions').update({ note: v }).eq('id', d.s));
+    const x = S.sessions.find((y) => y.id === d.s); if (x) x.note = v;
+    toast('Hinweis gespeichert');
+  },
   async setGrp(d) { ok(await sb.from('sessions').update({ grp: d.v }).eq('id', d.s)); toast('Gespeichert'); await refreshSessions(); },
   async guestAttend(d, el) { ok(await sb.rpc('set_guest_attended', { p_guest: d.g, p_attended: el.checked })); toast(el.checked ? 'Als anwesend vermerkt' : 'Vermerk entfernt'); await loadAll(); },
   async trialDone(d, el) { ok(await sb.from('waitlist').update({ trial_done: el.checked }).eq('id', d.id)); await loadAll(); render(); },
@@ -1049,8 +1060,9 @@ const F = {
     S.tab = 'termine'; await refreshSessions(); toast(`${rows.length} Trainings angelegt${skipped ? `, ${skipped} in den Weihnachtsferien ausgelassen` : ''}`);
   },
   async newSession(f) {
-    ok(await sb.from('sessions').insert({ title: f.title, grp: f.grp, location: f.location || null, note: f.note || null,
-      starts_at: new Date(`${f.date}T${f.start}`).toISOString(), ends_at: new Date(`${f.date}T${f.end}`).toISOString() }));
+    const ev = f.kind === 'event';
+    ok(await sb.from('sessions').insert({ title: f.title.trim(), grp: f.grp, location: f.location || null, note: f.note?.trim() || null, kind: ev ? 'event' : 'training', signup: ev,
+      starts_at: new Date(`${f.date}T${f.start}`).toISOString(), ends_at: f.end ? new Date(`${f.date}T${f.end}`).toISOString() : null }));
     S.tab = 'termine'; await refreshSessions(); toast('Termin angelegt');
   },
   async newInvite(f) {

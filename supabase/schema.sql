@@ -440,3 +440,7 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 --   Elternteil (wird nach dessen Wahl automatisch zurückgesetzt). kids_overview zeigt nur freie Kinder.
 -- * Freigabe: Trainer (kids_manage) löschen die guardians-Zeilen (Policy guardians_delete nur noch für kids_manage).
 -- * update_my_kid(kid, phone, birthdate, email): Eltern pflegen Telefon, Geburtstag und eigene E-Mail.
+
+-- ---------- Sondertermine (Migration special_events) ----------
+-- sessions.kind: 'training' | 'event' (Wettkampf, Feier …); sessions.signup = true: nur wer zusagt, ist dabei
+-- (Eltern sehen "Noch offen"). session_counts() zählt dann nur Zusagen. Hinweis (sessions.note) ist für Trainer editierbar.

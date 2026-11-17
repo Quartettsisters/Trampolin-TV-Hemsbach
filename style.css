@@ -127,3 +127,5 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .kidedit { padding: 12px 0; border-top: 1px solid #e5e9e8; } .kidedit:first-of-type { border-top: 0; } .kidedit label { display: block; margin-top: 8px; } .kidedit .btn { margin-top: 10px; }
 
 .wlnum { flex: none; min-width: 2em; height: 2em; padding: 0 .4em; margin-right: 10px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: #e3ecea; color: #14110f; font-weight: 700; font-size: .85rem; font-variant-numeric: tabular-nums; }
+
+.srow.event { border-left-color: #6b4fd8; } .srow.event .sdate b { color: #6b4fd8; } .badge.blue { background: #e7e1fb; color: #4a33a8; }
