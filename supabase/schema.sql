@@ -379,3 +379,30 @@ create policy guests_read on public.session_guests for select to authenticated u
 create policy guests_insert on public.session_guests for insert to authenticated with check (has_perm('registrations_manage'));
 create policy guests_delete on public.session_guests for delete to authenticated using (has_perm('registrations_manage'));
 -- (session_counts zählt Schnupperkinder zusätzlich: + count(*) from session_guests)
+
+-- Schnupper-Teilnahme: Abhaken bei Schnupperkindern, Platzangebot erst danach
+alter table public.session_guests add column if not exists attended boolean;
+alter table public.waitlist add column if not exists trial_done boolean not null default false;
+create policy guests_update on public.session_guests for update to authenticated
+  using (has_perm('attendance_manage')) with check (has_perm('attendance_manage'));
+create function public.set_guest_attended(p_guest uuid, p_attended boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare w uuid;
+begin
+  if not has_perm('attendance_manage') then raise exception 'Nicht erlaubt'; end if;
+  update session_guests set attended = p_attended where id = p_guest returning waitlist_id into w;
+  if w is not null and p_attended then update waitlist set trial_done = true where id = w; end if;
+end $$;
+revoke all on function public.set_guest_attended(uuid, boolean) from public, anon;
+grant execute on function public.set_guest_attended(uuid, boolean) to authenticated;
+
+-- Mailverlauf (Versand über Edge Function send-mail)
+create table public.mail_log (
+  id uuid primary key default gen_random_uuid(),
+  waitlist_id uuid references public.waitlist on delete cascade,
+  to_addr text not null, subject text not null, body text not null,
+  sent_by uuid references auth.users on delete set null,
+  sent_at timestamptz not null default now()
+);
+alter table public.mail_log enable row level security;
+create policy mail_log_read on public.mail_log for select to authenticated using (has_perm('waitlist_view'));
