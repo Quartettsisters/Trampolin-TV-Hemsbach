@@ -1,12 +1,12 @@
 /* Trampolin TV Hemsbach – schlicht, flach, angelehnt an SpielerPlus */
 :root { --p: #d71920; --ink: #111; --bg: #eef4f3; --card: #fff; --mut: #6c7775; --line: #d9e2e0; --head: #0b5a47; --ok: #1fbf4f; --bad: #e11d1d; --r: 14px; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-body { margin: 0; font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+body { margin: 0; font: 16px/1.45 ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; letter-spacing: -.005em; font-feature-settings: "cv11", "ss01"; background: var(--bg); color: var(--ink); }
 header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; background: var(--ink); color: #fff; padding: 8px 14px; padding-top: calc(8px + env(safe-area-inset-top)); }
 header.top img { width: 32px; height: 32px; border-radius: 9px; } header.top div { display: flex; flex-direction: column; line-height: 1.1; } header.top b { font-size: 1rem; } header.top span { font-size: .7rem; color: #b9c4c1; }
 main, #app > .card { max-width: 640px; margin: 0 auto; padding: 8px 12px 96px; }
 #app > .card { margin: 16px auto; padding: 20px; }
-h1 { margin: 0 0 6px; font-size: 1.6rem; font-weight: 800; } h2 { margin: 14px 0 6px; font-size: 1.05rem; font-weight: 800; color: var(--head); } h3 { margin: 14px 0 4px; font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; color: var(--head); font-weight: 800; }
+h1 { margin: 0 0 6px; font-size: 1.6rem; font-weight: 750; letter-spacing: -.02em; } h2 { margin: 14px 0 6px; font-size: 1.05rem; font-weight: 800; color: var(--head); } h3 { margin: 14px 0 4px; font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; color: var(--head); font-weight: 800; }
 p { margin: 8px 0; }
 .card { background: var(--card); border-radius: var(--r); padding: 14px; margin: 10px 0; }
 .muted { color: var(--mut); } .small { font-size: .85rem; } .center { text-align: center; padding: 30px 10px; } .break { word-break: break-all; } .err { color: var(--bad); }
@@ -105,3 +105,19 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .srow.tue .sdate b { color: #12913a; } .srow.fri .sdate b { color: var(--bad); }
 .cs.tue { background: #b5f0c6; } .cs.fri { background: #ffc2c2; } .cs.all { background: #cfd8d6; }
 .cs.x { background: #d4d9d8; }
+
+/* Postfach */
+.bdg { position: absolute; top: -3px; right: -9px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--p); color: #fff; font-weight: 700; font-size: .68rem; line-height: 17px; font-style: normal; text-align: center; } nav button span { position: relative; display: inline-block; } .bdg[hidden] { display: none; }
+.mbar { position: sticky; top: 46px; z-index: 4; background: var(--bg); padding: 6px 0 4px; }
+.mtop { display: flex; align-items: center; gap: 8px; } .msearch { flex: 1; display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #c9d6d3; border-radius: 10px; padding: 0 10px; } .msearch input { border: 0; margin: 0; padding: 10px 0; background: none; } .msearch .ic { width: 18px; height: 18px; color: var(--mut); }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 2px; } .chips .chip { white-space: nowrap; } .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); } .chip.small { padding: 4px 10px; font-size: .78rem; } .chip .ic { width: 1.1em; height: 1.1em; vertical-align: -.2em; } .chip.danger { color: var(--bad); } .cnt2 { background: var(--p); color: #fff; border-radius: 8px; padding: 0 6px; font-size: .72rem; }
+.mailrow { display: flex; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 14px; font: inherit; color: var(--ink); cursor: pointer; } .mailrow:last-child { border-bottom: 0; }
+.av { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #dfe9e6; color: var(--head); display: flex; align-items: center; justify-content: center; font-weight: 800; } .av.s { width: 32px; height: 32px; font-size: .85rem; }
+.mi { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; } .mi .l1 { display: flex; align-items: baseline; gap: 4px; } .mi .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; } .mi .dt { margin-left: auto; font-size: .75rem; color: var(--mut); white-space: nowrap; } .mi .dt .ic { width: 13px; height: 13px; vertical-align: -2px; }
+.mi .l2, .mi .l3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mi .l3 { color: var(--mut); font-size: .88rem; } .mi .l4 { display: flex; gap: 4px; flex-wrap: wrap; } .mi .l4:empty { display: none; } .starred .ic { width: 15px; height: 15px; color: #e0a100; fill: #e0a100; }
+.mailrow.unread .nm, .mailrow.unread .l2 { font-weight: 800; } .mailrow.unread { background: #f7fbfa; box-shadow: inset 3px 0 0 var(--p); }
+.mthread .msub2 { margin: 6px 0 4px; font-size: 1.2rem; color: var(--ink); } .mact { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.mcard { background: #fff; border-radius: 12px; padding: 12px; margin: 8px 0; } .mh { display: flex; gap: 10px; align-items: center; } .mhm { display: flex; flex-direction: column; line-height: 1.2; } .ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px; }
+.mcont { margin: 10px 0; } iframe.mbody { width: 100%; border: 0; display: block; min-height: 40px; background: #fff; } .mtext { white-space: pre-wrap; overflow-wrap: anywhere; } .mtext a { color: var(--head); }
+.atts { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.mbox { max-width: 560px; max-height: 92vh; overflow: auto; } .mrow2 { display: flex; align-items: center; justify-content: space-between; } .mrow2 .x { font-size: 1.6rem; }

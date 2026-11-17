@@ -425,3 +425,11 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 
 -- Täglicher Trainer-Push um 16 Uhr (Edge Function daily-push, per pg_cron; Token in push_keys.cron_token)
 -- select cron.schedule('daily-trainer-push', '0 14,15 * * *', $$ select net.http_post(url := '<projekt-url>/functions/v1/daily-push', headers := jsonb_build_object('Content-Type','application/json','x-cron-token',(select cron_token from public.push_keys where id = 1)), body := '{}'::jsonb) $$);
+
+-- ---------- Postfach (Edge Function "mail", IMAP-Spiegel) ----------
+-- Recht "mailbox" in roles.perms; Tabellen mail_messages (Cache des Vereinspostfachs) und mail_state.
+-- Cron: select cron.schedule('mail-sync', '* * * * *', $$ select net.http_post(url := '<projekt-url>/functions/v1/mail', headers := jsonb_build_object('Content-Type','application/json','x-cron-token',(select cron_token from public.push_keys where id = 1)), body := '{"op":"sync","cron":true}'::jsonb, timeout_milliseconds := 60000) $$);
+-- (vollständige Definition: Migration "mailbox" im Supabase-Projekt)
+
+-- ---------- Öffentliches Wartelisten-Formular (?w=1) ----------
+-- waitlist.source ('form' = von Eltern eingetragen); RPC submit_waitlist(...) für anon, mit Prüfungen, Dublettenschutz, Limit 15/Stunde.

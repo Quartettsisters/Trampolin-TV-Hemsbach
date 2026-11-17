@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, VAPID_PUBLIC_KEY } from './config.js';
+import { initMail } from './mail.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
@@ -64,6 +65,7 @@ const PERMS = {
   waitlist_view: 'Interessenten-Warteliste sehen',
   waitlist_manage: 'Interessenten-Warteliste bearbeiten',
   messages_send: 'Nachrichten senden',
+  mailbox: 'Postfach (Mails lesen, beantworten, senden)',
   users_manage: 'Nutzer & Rollen verwalten',
 };
 const can = (p) => !!S.perms[p];
@@ -123,6 +125,7 @@ $('#install').addEventListener('click', async (e) => {
 /* ---------- Start ---------- */
 async function init() {
   const p = new URLSearchParams(location.search);
+  if (p.get('w')) { S.view = 'waitform'; render(); if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {}); return; }
   if (p.get('c')) localStorage.setItem('tc_code', p.get('c'));
   S.code = p.get('c') || localStorage.getItem('tc_code');
   const { data: { session } } = await sb.auth.getSession();
@@ -151,6 +154,7 @@ async function afterLogin() {
   S.roleName = prof.data?.roles?.name || '';
   await loadAll();
   S.view = 'main';
+  MAIL.start();
   if (!can('registrations_view') && !S.myKids.length) S.tab = 'profil';
 }
 
@@ -195,18 +199,20 @@ async function loadAll() {
 
 // Aktivität: Anteil der letzten (bis zu 8) vergangenen Trainings der Gruppe des Kindes, auf die geantwortet wurde
 async function loadActivity() {
+  // Teilnahme = bei wie vielen der letzten Trainings (mit abgehakter Anwesenheit) das Kind da war.
+  // Solange zu wenige Trainings abgehakt sind, wird nichts angezeigt.
   S.activity = {};
   if (!can('registrations_view')) return;
   const since = new Date(Date.now() - 120 * 864e5).toISOString();
   const ses = ok(await sb.from('sessions').select('id,grp').eq('cancelled', false).lt('starts_at', new Date().toISOString()).gte('starts_at', since).order('starts_at', { ascending: false }));
   if (!ses.length) return;
-  const regs = ok(await sb.from('registrations').select('kid_id,session_id').in('session_id', ses.map((x) => x.id)));
-  const answered = new Set(regs.map((r) => `${r.kid_id}|${r.session_id}`));
+  const regs = ok(await sb.from('registrations').select('kid_id,session_id,attended').in('session_id', ses.map((x) => x.id)));
+  const checked = new Set(regs.filter((r) => r.attended).map((r) => r.session_id)); // Trainings, bei denen Anwesenheit erfasst wurde
+  const was = new Set(regs.filter((r) => r.attended).map((r) => `${r.kid_id}|${r.session_id}`));
   for (const k of S.allKids) {
-    const mine = ses.filter((x) => inGroup(k, x.grp)).slice(0, 8);
-    if (!mine.length) continue;
-    const rate = mine.filter((x) => answered.has(`${k.id}|${x.id}`)).length / mine.length;
-    S.activity[k.id] = rate >= 0.75 ? 'Hohe' : rate >= 0.4 ? 'Mittlere' : 'Geringe';
+    const mine = ses.filter((x) => inGroup(k, x.grp) && checked.has(x.id)).slice(0, 8);
+    if (mine.length < 3) continue;
+    S.activity[k.id] = { n: mine.filter((x) => was.has(`${k.id}|${x.id}`)).length, m: mine.length };
   }
 }
 
@@ -265,7 +271,12 @@ function pickSessions(name) {
 
 /* ---------- Views ---------- */
 function render() {
+  renderMain();
+  if (S.view === 'main') MAIL.afterRender();
+}
+function renderMain() {
   app.innerHTML = S.view === 'boot' ? '<p class="center muted">Lädt…</p>'
+    : S.view === 'waitform' ? viewWaitForm()
     : S.view === 'invite' ? viewInvite()
     : S.view === 'pick' ? viewPick()
     : S.view === 'login' ? viewLogin()
@@ -275,6 +286,23 @@ function render() {
 function viewMore() {
   const row = (t, i, l) => `<button class="mrow-btn" data-a="tab" data-t="${t}"><span>${i}</span>${l}<em>›</em></button>`;
   return `<div class="list">${can('sessions_manage') ? row('neu', ic('plus'), 'Trainings anlegen') : ''}${can('users_manage') ? row('nutzer', ic('key'), 'Team & Rollen') : ''}${row('profil', ic('user'), 'Mein Profil')}</div>`;
+}
+
+function viewWaitForm() {
+  if (S.waitDone) return `<div class="card"><h1>Vielen Dank!</h1><p>Wir haben Ihre Anfrage erhalten und Ihr Kind auf die Warteliste gesetzt. Sobald ein Platz frei wird oder ein Schnuppertraining möglich ist, melden wir uns bei Ihnen.</p><p class="muted small">Mit sportlichen Grüßen,<br>das Trampolin-Team des TV Hemsbach</p></div>`;
+  return `<div class="card"><h1>Warteliste Trampolin</h1>
+    <p>Aktuell können wir leider keine neuen Kinder aufnehmen. Über dieses Formular setzen wir Ihr Kind auf die Warteliste. Das Training findet dienstags und freitags jeweils von 17:30 bis 20:00 Uhr statt.</p>
+    <form data-f="submitWait">
+      <label>Vorname des Kindes<input name="first" required maxlength="60" autocomplete="off"></label>
+      <label>Nachname des Kindes<input name="last" maxlength="60" autocomplete="off"></label>
+      <label>Geburtsdatum des Kindes<input name="birth" type="date" required></label>
+      <label>Telefonnummer (mobil)<input name="phone" type="tel" required autocomplete="tel"></label>
+      <label>E-Mail-Adresse<input name="email" type="email" required autocomplete="email"></label>
+      <label>Gewünschter Trainingstag<select name="day" required><option value="">Bitte wählen</option><option value="tue">Dienstag</option><option value="fri">Freitag</option><option value="both">Dienstag oder Freitag</option></select></label>
+      <input name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+      <label class="line"><input type="checkbox" name="ok" required> Ich bin einverstanden, dass meine Angaben für die Verwaltung der Warteliste und die Kontaktaufnahme gespeichert werden.</label>
+      <button class="btn big">Auf die Warteliste setzen</button></form>
+    <p class="muted small">Die Angaben werden nur vom Trainerteam des TV Hemsbach gesehen und nur für die Warteliste verwendet.</p></div>`;
 }
 
 function viewInvite() {
@@ -314,6 +342,7 @@ function viewMain() {
     ['termine', ic('cal'), 'Termine', true],
     ['kinder', ic('users'), 'Mitglieder', can('kids_manage') || can('kids_view')],
     ['interessenten', ic('clock'), 'Warteliste', can('waitlist_view')],
+    ['postfach', ic('mail'), 'Postfach', can('mailbox')],
     ['news', ic('chat'), 'News', true],
     ['mehr', ic('menu'), 'Mehr', more],
     ['profil', ic('user'), 'Profil', !more],
@@ -322,8 +351,8 @@ function viewMain() {
   if (!tabs.some((t) => t[0] === S.tab) && !sub.includes(S.tab)) S.tab = 'termine';
   const active = (k) => S.tab === k || (k === 'mehr' && sub.includes(S.tab));
   const back = sub.includes(S.tab) ? '<button class="link" data-a="tab" data-t="mehr">‹ Zurück</button>' : '';
-  const body = back + { termine: viewTermine, neu: viewNew, interessenten: viewWaitlist, kinder: viewKids, nutzer: viewUsers, news: viewNews, profil: viewProfile, mehr: viewMore }[S.tab]();
-  return `<main>${body}</main><nav>${tabs.map(([k, i, l]) => `<button class="${active(k) ? 'on' : ''}" data-a="tab" data-t="${k}"><span>${i}</span>${l}</button>`).join('')}</nav>`;
+  const body = back + { termine: viewTermine, neu: viewNew, interessenten: viewWaitlist, kinder: viewKids, nutzer: viewUsers, postfach: MAIL.view, news: viewNews, profil: viewProfile, mehr: viewMore }[S.tab]();
+  return `<main>${body}</main><nav>${tabs.map(([k, i, l]) => `<button class="${active(k) ? 'on' : ''}" data-a="tab" data-t="${k}"><span>${i}${k === 'postfach' ? `<i class="bdg" id="mail-bdg" ${S.mail.unread ? '' : 'hidden'}>${S.mail.unread}</i>` : ''}</span>${l}</button>`).join('')}</nav>`;
 }
 
 function sessionHead(s) {
@@ -560,7 +589,7 @@ function wlList() {
   return `<div class="list">${list.map((w) => {
     const open = S.wlOpen === w.id;
     const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
-    const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
+    const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || (w.requested_on ? fmtDate(w.requested_on) : '–'))}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
       ${S.mailLog?.[w.id]?.length ? `<p class="small muted">Zuletzt gemailt: ${esc(fmtDate(S.mailLog[w.id][0].sent_at))} (${esc(S.mailLog[w.id][0].subject)})</p>` : ''}
       ${can('registrations_manage') && S.wlInv?.[w.id]?.length ? `<button class="link danger" data-a="withdrawInvite" data-id="${w.id}">Einladung zurücknehmen</button>` : ''}
       ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
@@ -579,7 +608,10 @@ function viewWaitlist() {
   const prev = S.importPreview ? `<div class="card"><b>${S.importPreview.length} Einträge gefunden.</b>
     <p class="small muted">Wird nur in deine Datenbank geschrieben. Bitte nur einmal importieren, sonst entstehen Doppelte.</p>
     <div class="btns"><button class="btn" data-a="importGo">Jetzt importieren</button><button class="btn ghost" data-a="importCancel">Abbrechen</button></div></div>` : '';
-  return `<h2>Interessenten-Warteliste</h2><div class="chips">${chips}</div>
+  const wlink = `${location.origin}${location.pathname}?w=1`;
+  return `<h2>Interessenten-Warteliste</h2>
+    ${can('waitlist_manage') ? `<div class="card"><b>Anmeldelink für Eltern</b><p class="small muted" style="margin:4px 0">Eltern tragen ihr Kind selbst ein, ohne Anmeldung. In Mails als Hyperlink-Text einfügen (Mail-Vorlage „Warteliste: Link zur Anmeldung“).</p><div class="btns"><button class="btn small" data-a="copyText" data-t="${esc(wlink)}">Link kopieren</button><a class="btn small ghost" href="${esc(wlink)}" target="_blank" rel="noopener">Ansehen</a></div></div>` : ''}
+    <div class="chips">${chips}</div>
     <input id="wlq" class="search" placeholder="Suchen (Name, Mail, Telefon)" value="${esc(S.wlQuery)}">
     ${prev}<div id="wl-list">${wlList()}</div>
     ${!can('waitlist_manage') ? '' : `<details class="card"><summary>Neuer Interessent</summary><form data-f="newWl">
@@ -642,7 +674,7 @@ function viewKids() {
   const rows = list.map((k) => {
     const g = S.guardCount[k.id] || 0;
     const sub = [mg ? (g ? `<span>${ic('check')} Eltern verknüpft${g > 1 ? ` (${g})` : ''}</span>` : `<span class="warn">${ic('x')} Keine Eltern verknüpft</span>`) : '',
-      S.activity[k.id] ? `<span>${S.activity[k.id]} Aktivität</span>` : '',
+      S.activity[k.id] ? `<span>Zuletzt ${S.activity[k.id].n} von ${S.activity[k.id].m} Trainings da</span>` : '',
       !k.tue && !k.fri ? '<span class="warn">Trainingstag fehlt</span>' : ''].filter(Boolean).join(' ');
     const open = mg && S.openKid === k.id;
     return `<div class="mrow"><div class="mmain ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
@@ -683,7 +715,10 @@ function viewProfile() {
 }
 
 /* ---------- Aktionen ---------- */
+const MAIL = initMail({ sb, S, esc, toast, can, render: () => render(), askModal, $, inviteText });
+
 const A = {
+  ...MAIL.actions,
   async acceptInvite() {
     if (!S.user) {
       const { data, error } = await sb.auth.signInAnonymously();
@@ -851,8 +886,8 @@ const A = {
       if (e.target.closest('[data-no]') || e.target === el) return el.remove();
       if (!e.target.closest('[data-ok]')) return;
       const btn = el.querySelector('[data-ok]'); btn.disabled = true; btn.textContent = 'Sende…';
-      const r = await sb.functions.invoke('send-mail', { body: { waitlist_id: w.id, subject: el.querySelector('#mc-s').value, body: el.querySelector('#mc-b').value } });
-      let msg = r.error ? 'Senden fehlgeschlagen' : '';
+      const r = await sb.functions.invoke('mail', { body: { op: 'send', waitlist_id: w.id, to: [w.email], subject: el.querySelector('#mc-s').value, text: el.querySelector('#mc-b').value } });
+      let msg = r.error ? 'Senden fehlgeschlagen' : (r.data?.error || '');
       if (r.error) { try { msg = (await r.error.context.json()).error || msg; } catch { /* ignore */ } }
       if (msg) { btn.disabled = false; btn.textContent = 'Jetzt senden'; return toast(msg); }
       el.remove(); toast('Mail gesendet'); await loadAll(); render();
@@ -883,6 +918,13 @@ const A = {
 };
 
 const F = {
+  async submitWait(f, form) {
+    if (f.website) { S.waitDone = true; return render(); } // Spam-Falle
+    const btn = form.querySelector('button.btn'); btn.disabled = true;
+    const r = await sb.rpc('submit_waitlist', { p_first: f.first, p_last: f.last || '', p_birth: f.birth, p_phone: f.phone, p_email: f.email, p_day: f.day });
+    if (r.error) { btn.disabled = false; throw new Error(r.error.message); }
+    S.waitDone = true; render(); window.scrollTo(0, 0);
+  },
   async email(f) {
     const email = f.email.trim();
     if (S.login.kid) localStorage.setItem('tc_pending', S.login.kid.id);
@@ -956,6 +998,7 @@ app.addEventListener('change', (e) => {
   if (el.dataset?.a && (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.type === 'checkbox')) run(() => A[el.dataset.a](el.dataset, el));
 });
 app.addEventListener('input', (e) => {
+  if (e.target.id === 'mailq') return MAIL.search(e.target.value);
   if (e.target.id === 'wlq') { S.wlQuery = e.target.value; $('#wl-list').innerHTML = wlList(); }
 });
 app.addEventListener('submit', (e) => {
