@@ -430,9 +430,8 @@ function wlList() {
     const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
-      ${w.note ? `<p class="note">${esc(w.note)}</p>` : ''}
+      ${can('waitlist_manage') ? `<label>Notiz<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}</p>` : '')}
       ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
-        <button class="btn small ghost" data-a="wlNote" data-id="${w.id}">Notiz</button>
         ${can('kids_manage') ? `<button class="btn small" data-a="wlAccept" data-id="${w.id}">Als Teilnehmer anlegen</button>` : ''}</div>` : ''}</div>`;
     return `<div class="scard">${head}${det}</div>`;
   }).join('')}</div>`;
@@ -678,11 +677,13 @@ const A = {
   wlFilter(d) { S.wlFilter = d.v; render(); },
   wlOpen(d) { S.wlOpen = S.wlOpen === d.id ? null : d.id; render(); },
   async wlStatus(d, el) { ok(await sb.from('waitlist').update({ status: el.value }).eq('id', d.id)); await loadAll(); render(); },
-  async wlNote(d) {
-    const w = S.waitlist.find((x) => x.id === d.id);
-    const v = prompt('Notiz', w?.note || ''); if (v === null) return;
-    ok(await sb.from('waitlist').update({ note: v.trim() || null }).eq('id', d.id)); await loadAll(); render();
+  async wlNote(d, el) {
+    const v = el.value.trim() || null;
+    ok(await sb.from('waitlist').update({ note: v }).eq('id', d.id));
+    const w = S.waitlist.find((x) => x.id === d.id); if (w) w.note = v;
+    toast('Notiz gespeichert');
   },
+
   async wlAccept(d) {
     const w = S.waitlist.find((x) => x.id === d.id);
     const name = `${w.first_name}${w.last_name ? ' ' + w.last_name.trim()[0] + '.' : ''}`;
@@ -770,7 +771,7 @@ app.addEventListener('click', (e) => {
 app.addEventListener('change', (e) => {
   const el = e.target;
   if (el.id === 'xl' && el.files[0]) return run(() => readExcel(el.files[0]));
-  if (el.dataset?.a && (el.tagName === 'SELECT' || el.type === 'checkbox')) run(() => A[el.dataset.a](el.dataset, el));
+  if (el.dataset?.a && (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.type === 'checkbox')) run(() => A[el.dataset.a](el.dataset, el));
 });
 app.addEventListener('input', (e) => {
   if (e.target.id === 'wlq') { S.wlQuery = e.target.value; $('#wl-list').innerHTML = wlList(); }
