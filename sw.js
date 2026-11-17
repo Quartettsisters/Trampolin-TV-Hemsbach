@@ -1,5 +1,5 @@
-const CACHE = 'tc-v10';
-const SHELL = ['./', './index.html', './app.js', './mail.js', './config.js', './style.css', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
+const CACHE = 'tc-v11';
+const SHELL = ['./', './index.html', './app.js', './mail.js', './config.js', './style.css', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './badge-96.png'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
@@ -17,7 +17,7 @@ self.addEventListener('fetch', (e) => {
 
 self.addEventListener('push', (e) => {
   let d = {}; try { d = e.data.json(); } catch { d = { title: 'Trampolin Training', body: e.data?.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Trampolin Training', { body: d.body || '', icon: 'icon.svg' }));
+  e.waitUntil(self.registration.showNotification(d.title || 'Trampolin Training', { body: d.body || '', icon: 'icon-192.png', badge: 'badge-96.png' }));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
