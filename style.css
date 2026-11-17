@@ -107,7 +107,7 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .cs.x { background: #d4d9d8; }
 
 /* Postfach */
-.bdg { position: absolute; top: -3px; right: -9px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--p); color: #fff; font-weight: 700; font-size: .68rem; line-height: 17px; font-style: normal; text-align: center; } nav button span { position: relative; display: inline-block; } .bdg[hidden] { display: none; }
+.bdg { position: absolute; top: -3px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--p); color: #fff; font-weight: 700; font-size: .68rem; line-height: 17px; font-style: normal; text-align: center; } nav button span { position: relative; display: block; } .bdg[hidden] { display: none; }
 .mbar { position: sticky; top: 46px; z-index: 4; background: var(--bg); padding: 6px 0 4px; }
 .mtop { display: flex; align-items: center; gap: 8px; } .msearch { flex: 1; display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #c9d6d3; border-radius: 10px; padding: 0 10px; } .msearch input { border: 0; margin: 0; padding: 10px 0; background: none; } .msearch .ic { width: 18px; height: 18px; color: var(--mut); }
 .chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 2px; } .chips .chip { white-space: nowrap; } .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); } .chip.small { padding: 4px 10px; font-size: .78rem; } .chip .ic { width: 1.1em; height: 1.1em; vertical-align: -.2em; } .chip.danger { color: var(--bad); } .cnt2 { background: var(--p); color: #fff; border-radius: 8px; padding: 0 6px; font-size: .72rem; }
