@@ -179,11 +179,14 @@ async function loadAll() {
     sb.from('roles').select('*').order('name'),
     can('users_manage') ? sb.from('staff_invites').select('*').is('used_at', null).gt('expires_at', new Date().toISOString()).order('expires_at') : none,
   ]);
+  S.mailLog = {};
   S.wlInv = {};
   if (can('registrations_view') && can('waitlist_view')) {
     const gq = await sb.from('session_guests').select('waitlist_id, sessions(starts_at)').not('waitlist_id', 'is', null);
     (gq.data || []).forEach((x) => { if (x.sessions) (S.wlInv[x.waitlist_id] ||= []).push(x.sessions.starts_at); });
     Object.values(S.wlInv).forEach((a) => a.sort());
+    const ml = await sb.from('mail_log').select('waitlist_id, subject, sent_at').order('sent_at', { ascending: false });
+    (ml.data || []).forEach((m) => { (S.mailLog[m.waitlist_id] ||= []).push(m); });
   }
   S.allKids = ok(k); S.waitlist = ok(w); S.inviteCode = c.data?.value || '';
   S.users = ok(u); S.roles = ok(r); S.invites = ok(inv);
@@ -511,9 +514,10 @@ function wlList() {
     const open = S.wlOpen === w.id;
     const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
+      ${S.mailLog?.[w.id]?.length ? `<p class="small muted">Zuletzt gemailt: ${esc(fmtDate(S.mailLog[w.id][0].sent_at))} (${esc(S.mailLog[w.id][0].subject)})</p>` : ''}
       ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
-      ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}">WhatsApp</a>` : ''}${w.email ? `<a class="btn small ghost" href="mailto:${esc(w.email)}?subject=${encodeURIComponent('Schnuppertraining Trampolin TV Hemsbach')}&body=${encodeURIComponent(inviteText(w, 'trial'))}">Mail</a>` : ''}</div><div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<a class="btn small ghost" href="mailto:${esc(w.email)}?subject=${encodeURIComponent('Trainingsplatz Trampolin TV Hemsbach')}&body=${encodeURIComponent(inviteText(w, 'offer'))}">Mail</a>` : ''}</div>` : ''}
+      ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="trial">Mail senden</button>` : ''}</div><div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="offer">Mail senden</button>` : ''}</div>` : ''}
       ${can('waitlist_manage') ? `<label>Notiz<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}</p>` : '')}
       ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
         ${can('kids_manage') ? `<button class="btn small" data-a="wlAccept" data-id="${w.id}">Als Teilnehmer anlegen</button>` : ''}</div>` : ''}</div>`;
@@ -773,6 +777,25 @@ const A = {
       toast('Eingeladen, als Schnupperkind eingetragen');
     } else ok(await sb.from('waitlist').update({ status: el.value }).eq('id', d.id));
     await loadAll(); render();
+  },
+  async mailCompose(d) {
+    const w = S.waitlist.find((x) => x.id === d.id); if (!w?.email) return;
+    const subject = d.k === 'trial' ? 'Schnuppertraining Trampolin TV Hemsbach' : 'Trainingsplatz Trampolin TV Hemsbach';
+    const el = document.createElement('div'); el.className = 'modal';
+    el.innerHTML = `<div class="box left"><h2>Mail an ${esc(w.email)}</h2><label>Betreff<input id="mc-s" value="${esc(subject)}"></label>
+      <label>Text<textarea id="mc-b" rows="12">${esc(inviteText(w, d.k))}</textarea></label>
+      <button class="btn big" data-ok>Jetzt senden</button><button class="link" data-no>Abbrechen</button></div>`;
+    el.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-no]') || e.target === el) return el.remove();
+      if (!e.target.closest('[data-ok]')) return;
+      const btn = el.querySelector('[data-ok]'); btn.disabled = true; btn.textContent = 'Sende…';
+      const r = await sb.functions.invoke('send-mail', { body: { waitlist_id: w.id, subject: el.querySelector('#mc-s').value, body: el.querySelector('#mc-b').value } });
+      let msg = r.error ? 'Senden fehlgeschlagen' : '';
+      if (r.error) { try { msg = (await r.error.context.json()).error || msg; } catch { /* ignore */ } }
+      if (msg) { btn.disabled = false; btn.textContent = 'Jetzt senden'; return toast(msg); }
+      el.remove(); toast('Mail gesendet'); await loadAll(); render();
+    });
+    document.body.appendChild(el);
   },
   async wlNote(d, el) {
     const v = el.value.trim() || null;
