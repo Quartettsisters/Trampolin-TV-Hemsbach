@@ -444,3 +444,7 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 -- ---------- Sondertermine (Migration special_events) ----------
 -- sessions.kind: 'training' | 'event' (Wettkampf, Feier …); sessions.signup = true: nur wer zusagt, ist dabei
 -- (Eltern sehen "Noch offen"). session_counts() zählt dann nur Zusagen. Hinweis (sessions.note) ist für Trainer editierbar.
+
+-- ---------- Eltern-Erinnerung 15:45 (Edge Function parent-reminder) ----------
+-- pg_cron 'parent-reminder' ('45 13,14 * * *' UTC; die Funktion prüft 15:45 Europe/Berlin, daher Sommer-/Winterzeit ok).
+-- Training: Eltern von Kindern der Gruppe ohne Absage; Termin mit Anmeldung: nur Eltern von Kindern mit Zusage.

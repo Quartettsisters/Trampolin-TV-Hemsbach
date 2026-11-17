@@ -79,7 +79,7 @@ const S = {
   open: null, detail: {}, guests: {}, dayFilter: 'all',
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
   inviteCode: '', invites: [], invite: null, lastInvite: null,
-  activity: {}, openKid: null, kidFilter: 'all', kidView: 'list',
+  activity: {}, editSess: null, openKid: null, kidFilter: 'all', kidView: 'list',
   termView: 'list', showPast: false, calMode: 'month', calMonth: { y: new Date().getFullYear(), m: new Date().getMonth() }, calWeek: mondayOf(new Date()), calDay: dkey(new Date()),
 };
 
@@ -522,6 +522,14 @@ function detailTrainer(s) {
   const gl = (S.guests[s.id] || []).filter((g) => g.confirmed !== false), offers = (S.guests[s.id] || []).filter((g) => g.confirmed === false);
   const wl = (S.waitlist || []).filter((w) => ['waiting', 'invited'].includes(w.status));
   const noteBox = can('sessions_manage') ? `<label style="display:block;margin-top:12px">Hinweis zum Termin (für alle sichtbar)<textarea rows="3" data-a="sessNote" data-s="${s.id}" placeholder="z. B. Treffpunkt, Mitbringen, Ablauf. Wird automatisch gespeichert">${esc(s.note || '')}</textarea></label>` : '';
+  const editBox = !can('sessions_manage') ? '' : S.editSess === s.id
+    ? `<form data-f="saveSession" class="kidedit"><input type="hidden" name="id" value="${s.id}"><b>Termin bearbeiten</b>
+      <label>Titel<input name="title" value="${esc(s.title)}" required></label>
+      <label>Datum<input name="date" type="date" value="${dkey(s.starts_at)}" required></label>
+      <label>Beginn<input name="start" type="time" value="${tm(s.starts_at)}" required></label><label>Ende (optional)<input name="end" type="time" value="${s.ends_at ? tm(s.ends_at) : ''}"></label>
+      <label>Ort<input name="location" value="${esc(s.location || '')}"></label>
+      <div class="btns"><button class="btn small">Speichern</button><button type="button" class="btn small ghost" data-a="editSession" data-s="${s.id}">Abbrechen</button></div></form>`
+    : `<button class="btn small ghost" style="margin-top:10px" data-a="editSession" data-s="${s.id}">Termin bearbeiten (Titel, Zeit, Ort)</button>`;
   const guestBox = `<div class="sh"><span>Schnupperkinder</span><b>${gl.length}</b></div>
     ${gl.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${att ? `<label class="att"><input type="checkbox" data-a="guestAttend" data-g="${g.id}" ${g.attended ? 'checked' : ''}> da</label>` : ''}${mg ? `<button class="link danger" data-a="delGuest" data-s="${s.id}" data-g="${g.id}">Löschen</button>` : ''}</div>`).join('')}
     ${offers.length ? `<div class="sh"><span>Eingeladen, Antwort offen</span><b>${offers.length}</b></div>${offers.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${mg ? `<button class="btn small" data-a="confirmGuest" data-s="${s.id}" data-g="${g.id}">Kommt zu diesem Termin</button><button class="x" data-a="delGuest" data-s="${s.id}" data-g="${g.id}" title="Entfernen">${ic('x')}</button>` : ''}</div>`).join('')}` : ''}
@@ -530,7 +538,7 @@ function detailTrainer(s) {
   return `<div class="sdetail">
     <div class="sh"><span>${s.signup ? 'Zugesagt (Anmeldung nötig)' : 'Zugesagt'}</span><b>${inn.length}</b></div>${inn.map((k) => row(k, true)).join('') || '<p class="muted small">Niemand</p>'}
     <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}
-    ${s.signup ? `<div class="sh"><span>Noch keine Antwort</span><b>${open.length}</b></div>${open.map((k) => row(k, false, true)).join('') || '<p class="muted small">Niemand</p>'}` : ''}${guestBox}${noteBox}${manage}</div>`;
+    ${s.signup ? `<div class="sh"><span>Noch keine Antwort</span><b>${open.length}</b></div>${open.map((k) => row(k, false, true)).join('') || '<p class="muted small">Niemand</p>'}` : ''}${guestBox}${noteBox}${editBox}${manage}</div>`;
 }
 
 function viewNew() {
@@ -824,6 +832,7 @@ const A = {
   },
   async toggle(d) { S.open = S.open === d.s ? null : d.s; if (S.open) await loadDetail(S.open); render(); },
   async attend(d, el) { ok(await sb.rpc('set_attended', { p_session: d.s, p_kid: d.k, p_attended: el.checked })); },
+  editSession(d) { S.editSess = S.editSess === d.s ? null : d.s; render(); },
   async sessNote(d, el) {
     const v = el.value.trim() || null;
     ok(await sb.from('sessions').update({ note: v }).eq('id', d.s));
@@ -1005,6 +1014,12 @@ const A = {
 };
 
 const F = {
+  async saveSession(f) {
+    const title = f.title.trim(); if (!title) throw new Error('Bitte einen Titel eingeben.');
+    ok(await sb.from('sessions').update({ title, location: f.location?.trim() || null,
+      starts_at: new Date(`${f.date}T${f.start}`).toISOString(), ends_at: f.end ? new Date(`${f.date}T${f.end}`).toISOString() : null }).eq('id', f.id));
+    S.editSess = null; await refreshSessions(); toast('Termin gespeichert');
+  },
   async parentEmail(f) {
     const e = f.email.trim().toLowerCase();
     if (!/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(e)) throw new Error('Bitte eine gültige E-Mail-Adresse eingeben.');
