@@ -474,6 +474,37 @@ function wlFiltered() {
     .sort((a, b) => (a.requested_on || '9999').localeCompare(b.requested_on || '9999') || String(a.created_at).localeCompare(String(b.created_at)));
 }
 const waNumber = (p) => { let d = String(p || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (d.startsWith('0')) return '49' + d.slice(1); return d.length >= 10 ? d : '49' + d; };
+function cancelText(ses) {
+  const when = new Date(ses.starts_at).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+  return `Liebe Eltern,
+
+leider muss das Schnuppertraining am ${when} um ${tm(ses.starts_at)} Uhr ausfallen. Wir geben euch Bescheid, sobald es einen Ersatztermin gibt.
+
+Entschuldigt bitte die Umstände.
+
+Mit sportlichen Grüßen,
+
+Jarina Adams
+Trampolin Trainer
+BA. Sportwissenschaften
+TV Hemsbach`;
+}
+function showCancelNotices(ses, guests) {
+  const rows = guests.map((g) => {
+    const w = (S.waitlist || []).find((x) => x.id === g.waitlist_id);
+    const btns = w ? `${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(cancelText(ses))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-mail="${w.id}">Mail senden</button>` : ''}${!w.phone && !w.email ? '<span class="muted small">keine Kontaktdaten</span>' : ''}` : '<span class="muted small">kein Kontakt hinterlegt</span>';
+    return `<div class="prow"><span class="pn">${esc(g.name)}</span>${btns}</div>`;
+  }).join('');
+  const el = document.createElement('div'); el.className = 'modal';
+  el.innerHTML = `<div class="box left"><h2>Schnupperkinder informieren</h2><p>Diese Eltern bekommen keine Push-Nachricht. Bitte sag ihnen selbst ab:</p><div class="picklist">${rows}</div><button class="btn big" data-no>Fertig</button></div>`;
+  el.addEventListener('click', (e) => {
+    const m = e.target.closest('[data-mail]');
+    if (m) { A.mailCompose({ id: m.dataset.mail, k: 'cancel', ses }); return; }
+    if (e.target.closest('[data-no]') || e.target === el) el.remove();
+  });
+  document.body.appendChild(el);
+}
+
 function inviteText(w, kind) {
   const inv = S.wlInv?.[w.id] || [];
   const fmtD = (x) => new Date(x).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
@@ -715,7 +746,9 @@ const A = {
       const r = await sb.functions.invoke('send-push', { body: { title, body, session_id: ses.id } });
       toast(r.error ? 'Abgesagt, Push konnte nicht gesendet werden' : `Abgesagt, Push an ${r.data?.sent ?? 0} Geräte gesendet`);
     } else toast(cancel ? 'Training abgesagt' : 'Training wieder aktiv');
+    const gl = (S.guests[d.s] || []);
     await refreshSessions();
+    if (cancel && ses && gl.length) showCancelNotices(ses, gl);
   },
   async deleteSession(d) { const gst = (S.guests[d.s] || []); if (!confirm(gst.length ? `Achtung: Für diesen Termin ${gst.length === 1 ? 'ist 1 Schnupperkind' : `sind ${gst.length} Schnupperkinder`} angemeldet (${gst.map((g) => g.name).join(', ')}). Termin trotzdem samt Anmeldungen löschen?` : 'Termin samt Anmeldungen löschen?')) return; ok(await sb.from('sessions').delete().eq('id', d.s)); S.open = null; await refreshSessions(); },
   async kidDay(d) {
@@ -808,10 +841,11 @@ const A = {
       if (!(await inviteFlow(w))) return;
       await loadAll(); w = S.waitlist.find((x) => x.id === d.id);
     }
-    const subject = d.k === 'trial' ? 'Schnuppertraining Trampolin TV Hemsbach' : 'Trainingsplatz Trampolin TV Hemsbach';
+    const subject = d.k === 'cancel' ? 'Schnuppertraining abgesagt Trampolin TV Hemsbach' : d.k === 'trial' ? 'Schnuppertraining Trampolin TV Hemsbach' : 'Trainingsplatz Trampolin TV Hemsbach';
+    const bodyText = d.k === 'cancel' ? cancelText(d.ses) : inviteText(w, d.k);
     const el = document.createElement('div'); el.className = 'modal';
     el.innerHTML = `<div class="box left"><h2>Mail an ${esc(w.email)}</h2><label>Betreff<input id="mc-s" value="${esc(subject)}"></label>
-      <label>Text<textarea id="mc-b" rows="12">${esc(inviteText(w, d.k))}</textarea></label>
+      <label>Text<textarea id="mc-b" rows="12">${esc(bodyText)}</textarea></label>
       <button class="btn big" data-ok>Jetzt senden</button><button class="link" data-no>Abbrechen</button></div>`;
     el.addEventListener('click', async (e) => {
       if (e.target.closest('[data-no]') || e.target === el) return el.remove();
