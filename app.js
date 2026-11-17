@@ -86,8 +86,8 @@ $('#install').addEventListener('click', async (e) => {
 /* ---------- Start ---------- */
 async function init() {
   const p = new URLSearchParams(location.search);
-  if (p.get('c')) { localStorage.setItem('tc_code', p.get('c')); history.replaceState(null, '', location.pathname); }
-  S.code = localStorage.getItem('tc_code');
+  if (p.get('c')) localStorage.setItem('tc_code', p.get('c'));
+  S.code = p.get('c') || localStorage.getItem('tc_code');
   const { data: { session } } = await sb.auth.getSession();
   if (session) { S.user = session.user; await afterLogin(); }
   else if (S.code) { await loadOverview(); S.view = 'pick'; }
@@ -167,13 +167,13 @@ function viewPick() {
   return `<div class="card"><h1>🤸 Trampolin Training</h1>
     <h2>Wer ist dein Kind?</h2>
     ${S.overviewError ? `<p class="err">${esc(S.overviewError)}</p>` : `<div class="kidlist">${kids}</div>`}
-    <p class="muted small">Du kannst später weitere Kinder hinzufügen.</p>
-    <button class="link" data-a="toLogin">Ich habe schon ein Konto</button></div>`;
+    <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst. Danach tippst du hier dein Kind an. Weitere Kinder kannst du später hinzufügen.</p>
+    <button class="link" data-a="toLogin">Anmeldung für Trainer / Geschäftsstelle</button></div>`;
 }
 
 function viewLogin() {
   const L = S.login;
-  const who = L.kid ? `<p>Du meldest dich für <b>${esc(L.kid.name)}</b> an.</p>` : '';
+  const who = '<p>Anmeldung für Trainer und Geschäftsstelle.</p>';
   const form = L.step === 'email'
     ? `<form data-f="email"><label>E-Mail-Adresse<input name="email" type="email" required autocomplete="email" value="${esc(L.email)}"></label>
        <button class="btn big">Code per Mail senden</button></form>`
@@ -182,7 +182,7 @@ function viewLogin() {
        <button class="btn big">Anmelden</button>
        <button type="button" class="link" data-a="toEmail">Andere Mailadresse</button></form>`;
   return `<div class="card"><h1>🤸 Trampolin Training</h1>${who}${form}
-    ${S.code && L.step === 'email' && !L.kid ? '<button class="link" data-a="backPick">Zurück zur Kinder-Auswahl</button>' : ''}
+    ${S.code && L.step === 'email' ? '<button class="link" data-a="backPick">Zurück zur Kinder-Auswahl</button>' : ''}
     <p class="muted small">Du bleibst danach auf diesem Gerät angemeldet.</p></div>`;
 }
 
@@ -310,12 +310,13 @@ function viewWaitlist() {
 
 function viewUsers() {
   const roleOpts = (cur) => S.roles.map((r) => `<option value="${r.id}" ${r.id === cur ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
-  const users = S.users.map((u) => `<div class="kidrow"><div><b class="break">${esc(u.email)}</b>${u.id === S.user.id ? ' <span class="badge gray">du</span>' : ''}</div>
+  const users = S.users.filter((u) => u.email).map((u) => `<div class="kidrow"><div><b class="break">${esc(u.email)}</b>${u.id === S.user.id ? ' <span class="badge gray">du</span>' : ''}</div>
     <select data-a="setRole" data-u="${u.id}" ${u.id === S.user.id ? 'disabled' : ''}>${roleOpts(u.role_id)}</select></div>`).join('') || '<p class="muted">Noch niemand.</p>';
   const roles = S.roles.map((r) => `<details class="card"><summary><b>${esc(r.name)}</b>${r.is_system ? ' <span class="badge gray">fest</span>' : ''}</summary>
     ${Object.entries(PERMS).map(([k, l]) => `<label class="line"><input type="checkbox" data-a="togglePerm" data-id="${r.id}" data-p="${k}" ${r.perms?.[k] ? 'checked' : ''} ${r.is_system ? 'disabled' : ''}> ${esc(l)}</label>`).join('')}
     ${r.is_system ? '' : `<button class="link" data-a="delRole" data-id="${r.id}">Rolle löschen</button>`}</details>`).join('');
-  return `<h2>Nutzer & Rollen</h2><div class="card">${users}</div>
+  const anon = S.users.filter((u) => !u.email).length;
+  return `<h2>Nutzer & Rollen</h2><div class="card">${users}<p class="small muted">Dazu ${anon} Eltern-Geräte (über den Einladungslink, ohne Mail).</p></div>
     <h2>Rollen und ihre Rechte</h2>${roles}
     <div class="card"><form data-f="newRole"><label>Neue Rolle<input name="name" placeholder="z. B. Übungsleiter" required></label><button class="btn">Rolle anlegen</button></form>
     <p class="small muted">Die festen Rollen (Admin, Trainer, Eltern) lassen sich nicht ändern. Neue Rollen starten ohne Rechte.</p></div>`;
@@ -332,7 +333,8 @@ function viewKids() {
     <button class="btn small ghost" data-a="kidPhone" data-id="${k.id}">Telefon</button>
     <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Deaktivieren' : 'Aktivieren'}</button></div>` : ''}</div>`).join('');
   const link = mg ? `<div class="card"><h2>Einladungslink für Eltern</h2><p class="small break">${esc(`${location.origin}${location.pathname}?c=${S.inviteCode}`)}</p>
-    <div class="btns"><button class="btn" data-a="copyLink">Link kopieren</button><button class="btn ghost" data-a="rotate">Neuen Code erzeugen</button></div>
+    <div class="btns"><a class="btn" target="_blank" rel="noopener" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Hallo! Hier ist die Trampolin-App vom TV Hemsbach. Link öffnen und dein Kind antippen, mehr ist nicht nötig:\n${location.origin}${location.pathname}?c=${S.inviteCode}`)}`)}">Per WhatsApp teilen</a>
+    <button class="btn ghost" data-a="copyLink">Link kopieren</button><button class="btn ghost" data-a="rotate">Neuen Code erzeugen</button></div>
     <p class="small muted">Wer den Link hat, sieht die Vornamen der Kinder. Nur in der Gruppe teilen.</p></div>` : '';
   const form = mg ? `<form data-f="newKid"><label>Name (z. B. „Mia K.“)<input name="name" required></label><label>Telefon (Notfall)<input name="phone" type="tel"></label>
     <label class="line"><input type="checkbox" name="tue"> Dienstag</label><label class="line"><input type="checkbox" name="fri"> Freitag</label><button class="btn">Kind anlegen</button></form>` : '';
@@ -354,12 +356,20 @@ function viewProfile() {
     <button class="btn" data-a="addKid">Kind hinzufügen</button></div>
     <div class="card"><h2>Benachrichtigungen</h2><button class="btn" data-a="push">Auf diesem Gerät aktivieren</button>
     <p class="small muted">iPhone: App zuerst über „Teilen → Zum Home-Bildschirm“ installieren.</p></div>
-    <div class="card"><p class="small muted">Angemeldet als ${esc(S.user.email)} · Rolle: ${esc(S.roleName)}</p><button class="btn ghost" data-a="logout">Abmelden</button></div>`;
+    <div class="card"><p class="small muted">${S.user.email ? `Angemeldet als ${esc(S.user.email)} · Rolle: ${esc(S.roleName)}` : 'Du bist auf diesem Handy angemeldet. Bei einem neuen Handy: Einladungslink aus der WhatsApp-Gruppe erneut öffnen und dein Kind antippen.'}</p><button class="btn ghost" data-a="logout">Abmelden</button></div>`;
 }
 
 /* ---------- Aktionen ---------- */
 const A = {
-  pickKid(d) { S.login = { step: 'email', email: '', kid: { id: d.id, name: d.name } }; S.view = 'login'; render(); },
+  async pickKid(d) {
+    if (!S.user) {
+      const { data, error } = await sb.auth.signInAnonymously();
+      if (error) throw new Error('Anmeldung nicht möglich: ' + error.message);
+      S.user = data.user;
+    }
+    ok(await sb.rpc('claim_kid', { p_kid: d.id, p_code: S.code }));
+    await afterLogin(); S.tab = 'termine'; render(); toast(`${d.name} ist verknüpft ✔`);
+  },
   toLogin() { S.login = { step: 'email', email: '', kid: null }; S.view = 'login'; render(); },
   toEmail() { S.login.step = 'email'; render(); },
   backPick() { S.view = 'pick'; render(); },
@@ -398,7 +408,10 @@ const A = {
     S.overview = S.overview.filter((k) => !mine.has(k.id));
     S.view = 'pick'; render();
   },
-  async logout() { await sb.auth.signOut(); location.reload(); },
+  async logout() {
+    if (!S.user.email && !confirm('Wirklich abmelden? Danach musst du den Einladungslink erneut öffnen.')) return;
+    await sb.auth.signOut(); location.reload();
+  },
   async push() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return toast('Dieses Gerät unterstützt keine Push-Nachrichten.');
     if (!VAPID_PUBLIC_KEY) return toast('Push ist noch nicht eingerichtet.');

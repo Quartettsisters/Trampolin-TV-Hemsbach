@@ -10,7 +10,8 @@ Keine Excel-/CSV-Dateien und keine echten Namen ins Repository legen (`.gitignor
 
 1. **Supabase-Projekt** anlegen, Region **Frankfurt (EU)**. Im Dashboard den Auftragsverarbeitungsvertrag (DPA) abschließen.
 2. **SQL-Editor** → Inhalt von `supabase/schema.sql` einfügen und ausführen.
-3. **Authentication → Email Templates → Magic Link / OTP:** im Mailtext `{{ .Token }}` verwenden (der 6-stellige Code), z. B.
+3. **Authentication → Sign In / Providers → „Allow anonymous sign-ins“ einschalten.** Eltern melden sich damit über den Einladungslink an, ganz ohne Mail.
+   Nur für Trainer/Geschäftsstelle (Anmeldung per Mail-Code): **Authentication → Email Templates → Magic Link / OTP** (braucht eigenen SMTP-Versand): im Mailtext `{{ .Token }}` verwenden (der 6-stellige Code), z. B.
    „Dein Anmeldecode: {{ .Token }}“. Die App meldet per Code an, damit es auch in Mail-Apps ohne Browserwechsel klappt.
    Unter Authentication → Providers → Email „Confirm email“ aktiv lassen.
 4. `config.js`: `SUPABASE_URL` und `SUPABASE_ANON_KEY` (Project Settings → API) eintragen.
