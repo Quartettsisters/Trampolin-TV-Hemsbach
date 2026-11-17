@@ -251,9 +251,12 @@ function viewMain() {
 
 function sessionHead(s) {
   const c = S.counts[s.id] || { going: 0 };
-  return `<div class="shead"><div><b>${esc(s.title)}</b> <span class="badge gray">${DAY[s.grp]}</span>${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}<br>
-    <span class="muted">${fmt(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.location ? ' · ' + esc(s.location) : ''}</span>${s.note ? `<br><span class="small">${esc(s.note)}</span>` : ''}</div>
-    <div class="cnt"><b>${c.going}</b><br><span class="small muted">zugesagt</span></div></div>`;
+  const d = new Date(s.starts_at);
+  const wd = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
+  return `<div class="srow${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
+    <div class="sinfo"><div><b>${esc(s.title)}</b>${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}</div>
+    <div class="muted small">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.location ? ' · ' + esc(s.location) : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div>
+    ${can('registrations_view') ? `<div class="scount"><b>${c.going}</b><small>dabei</small></div>` : ''}</div>`;
 }
 
 const upcoming = (list) => list.filter((s) => new Date(s.starts_at) >= new Date(Date.now() - 3 * 3600e3));
@@ -273,10 +276,10 @@ function sessionCardParent(s) {
       <button class="btn ghost ${st === 'declined' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="no">Absagen</button></div>`;
     return `<div class="kidrow"><div><b>${esc(k.name)}</b> ${badge}</div>${btns}</div>`;
   }).join('');
-  return `<div class="card">${sessionHead(s)}${rows}</div>`;
+  return `<div class="scard">${sessionHead(s)}${rows}</div>`;
 }
 function sessionCardTrainer(s) {
-  return `<div class="card"><div data-a="toggle" data-s="${s.id}" class="click">${sessionHead(s)}</div>${S.open === s.id ? detailTrainer(s) : ''}</div>`;
+  return `<div class="scard"><div data-a="toggle" data-s="${s.id}" class="click">${sessionHead(s)}</div>${S.open === s.id ? detailTrainer(s) : ''}</div>`;
 }
 const sessionCard = (s) => (can('registrations_view') ? sessionCardTrainer(s) : sessionCardParent(s));
 
@@ -293,7 +296,7 @@ function viewTermineList() {
   const chips = tr ? `<div class="chips">${[['all', 'Alle'], ['tue', 'Dienstag'], ['fri', 'Freitag']].map(([k, l]) => `<button class="chip ${S.dayFilter === k ? 'on' : ''}" data-a="dayFilter" data-v="${k}">${l}</button>`).join('')}</div>` : '';
   const list = upcoming(visibleSessions()).filter((s) => !tr || S.dayFilter === 'all' || s.grp === S.dayFilter);
   if (!list.length) return `${chips}<p class="muted center">Keine Termine.${can('sessions_manage') ? ' Lege unter „Neu“ welche an.' : ''}</p>`;
-  return chips + list.map(sessionCard).join('');
+  return chips + `<div class="list">${list.map(sessionCard).join('')}</div>`;
 }
 
 const bdaysOn = (d) => S.allKids.filter((k) => k.active && k.birthdate && new Date(k.birthdate).getMonth() === d.getMonth() && new Date(k.birthdate).getDate() === d.getDate());
@@ -342,24 +345,19 @@ function viewTermine() {
 
 function detailTrainer(s) {
   const regs = S.detail[s.id];
-  if (!regs) return '<p class="muted">Lädt…</p>';
+  if (!regs) return '<p class="muted small" style="padding:0 14px 12px">Lädt…</p>';
   const by = (st) => regs.filter((r) => r.status === st);
   const answered = new Set(regs.map((r) => r.kid_id));
   const none = S.allKids.filter((k) => k.active && inGroup(k, s.grp) && !answered.has(k.id));
-  const rm = (r) => (can('registrations_manage') ? `<button class="x" data-a="answer" data-s="${s.id}" data-k="${r.kid_id}" data-v="none" title="Entfernen">✕</button>` : '');
-  const going = by('going').map((r) => `<label class="line"><input type="checkbox" data-a="attend" data-r="${r.id}" ${r.attended ? 'checked' : ''} ${can('attendance_manage') ? '' : 'disabled'}> ${esc(r.kids?.name)}
-    ${r.kids?.phone ? `<a href="tel:${esc(r.kids.phone)}">📞</a>` : ''}${rm(r)}</label>`).join('') || '<p class="muted small">Niemand</p>';
-  const dec = by('declined').map((r) => `<span class="chip">${esc(r.kids?.name)}</span>`).join('') || '<span class="muted small">–</span>';
-  const nores = none.map((k) => (can('registrations_manage')
-    ? `<span class="chip" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes" title="Eintragen">${esc(k.name)} ＋</span>`
-    : `<span class="chip">${esc(k.name)}</span>`)).join('') || '<span class="muted small">–</span>';
-  const manage = can('sessions_manage') ? `
-    <div class="btns"><button class="btn ghost small" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button>
-    <button class="btn ghost small danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
-  return `<div class="detail">
-    <h3>Dabei (${by('going').length})${can('attendance_manage') ? ' – Anwesenheit abhaken' : ''}</h3>${going}
-    <h3>Abgesagt</h3><div>${dec}</div>
-    <h3>Keine Antwort${can('registrations_manage') ? ' (antippen = eintragen)' : ''}</h3><div>${nores}</div>${manage}</div>`;
+  const mg = can('registrations_manage');
+  const going = by('going').map((r) => `<label class="line"><input type="checkbox" data-a="attend" data-r="${r.id}" ${r.attended ? 'checked' : ''} ${can('attendance_manage') ? '' : 'disabled'}> ${esc(r.kids?.name)}${mg ? `<button class="x" data-a="answer" data-s="${s.id}" data-k="${r.kid_id}" data-v="none" title="Entfernen">✕</button>` : ''}</label>`).join('');
+  const dec = by('declined').map((r) => esc(r.kids?.name)).join(', ');
+  const nores = none.map((k) => (mg ? `<button class="chip" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">${esc(k.name)} ＋</button>` : `<span class="chip">${esc(k.name)}</span>`)).join('');
+  const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
+  return `<div class="sdetail">
+    ${going ? `<h3>Dabei${can('attendance_manage') ? ' · abhaken' : ''}</h3>${going}` : '<p class="muted small">Noch keine Zusagen.</p>'}
+    ${dec ? `<h3>Abgesagt</h3><p class="small">${dec}</p>` : ''}
+    ${nores ? `<h3>Noch offen${mg ? ' · antippen = zusagen' : ''}</h3><div class="chips">${nores}</div>` : ''}${manage}</div>`;
 }
 
 function viewNew() {

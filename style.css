@@ -73,3 +73,10 @@ nav button span { display: block; font-size: 1.25rem; line-height: 1.2; } nav bu
 .bd { font-size: .62rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wrow { display: flex; gap: 12px; padding: 10px; border-bottom: 1px solid var(--line); cursor: pointer; background: #fff; } .wrow > b { width: 72px; flex: none; font-size: .85rem; } .wrow > div { flex: 1; }
 .wrow.today { background: #66f585; } .wrow.sel { outline: 2px solid var(--ink); outline-offset: -2px; }
+
+.scard { border-bottom: 1px solid var(--line); } .scard:last-child { border-bottom: 0; }
+.srow { display: flex; align-items: center; gap: 14px; padding: 12px 14px; } .srow.x { opacity: .55; }
+.sdate { flex: none; width: 48px; text-align: center; line-height: 1.1; } .sdate small { display: block; font-size: .7rem; text-transform: uppercase; color: var(--mut); font-weight: 700; } .sdate b { font-size: 1.05rem; }
+.sinfo { flex: 1; min-width: 0; } .scount { flex: none; text-align: center; line-height: 1.1; } .scount b { display: block; font-size: 1.2rem; } .scount small { font-size: .65rem; color: var(--mut); }
+.sdetail { padding: 0 14px 12px; background: #f6faf9; } .sdetail h3 { margin-top: 10px; }
+.scard > .kidrow { padding: 8px 14px; }
