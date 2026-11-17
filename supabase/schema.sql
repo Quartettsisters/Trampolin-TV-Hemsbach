@@ -364,3 +364,17 @@ grant execute on function public.create_staff_invite, public.redeem_staff_invite
 -- ---------- Endzeit der Trainings, Geburtstag der Kinder ----------
 alter table public.sessions add column ends_at timestamptz;
 alter table public.kids add column birthdate date;
+
+-- Schnupperkinder pro Termin
+create table public.session_guests (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.sessions on delete cascade,
+  name text not null,
+  waitlist_id uuid references public.waitlist on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.session_guests enable row level security;
+create policy guests_read on public.session_guests for select to authenticated using (has_perm('registrations_view'));
+create policy guests_insert on public.session_guests for insert to authenticated with check (has_perm('registrations_manage'));
+create policy guests_delete on public.session_guests for delete to authenticated using (has_perm('registrations_manage'));
+-- (session_counts zählt Schnupperkinder zusätzlich: + count(*) from session_guests)

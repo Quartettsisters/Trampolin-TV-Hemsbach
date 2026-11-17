@@ -49,7 +49,7 @@ const S = {
   login: { step: 'email', email: '', kid: null },
   myKids: [], allKids: [], guardCount: {},
   sessions: [], counts: {}, regs: [], messages: [],
-  open: null, detail: {}, dayFilter: 'all',
+  open: null, detail: {}, guests: {}, dayFilter: 'all',
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
   inviteCode: '', invites: [], invite: null, lastInvite: null,
   activity: {}, openKid: null, kidFilter: 'all', kidView: 'list',
@@ -184,6 +184,7 @@ async function refreshSessions() {
 
 async function loadDetail(id) {
   S.detail[id] = ok(await sb.from('registrations').select('*, kids(name,phone)').eq('session_id', id).order('status'));
+  S.guests[id] = ok(await sb.from('session_guests').select('*').eq('session_id', id).order('created_at'));
 }
 
 /* ---------- Views ---------- */
@@ -360,9 +361,15 @@ function detailTrainer(s) {
     ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
     ${btn(k, 'yes', going, '👍')}${btn(k, 'no', !going, '👎')}</div>`;
   const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
+  const gl = S.guests[s.id] || [];
+  const wl = (S.waitlist || []).filter((w) => ['waiting', 'invited'].includes(w.status));
+  const guestBox = `<div class="sh"><span>Schnupperkinder</span><b>${gl.length}</b></div>
+    ${gl.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${mg ? `<button class="link danger" data-a="delGuest" data-s="${s.id}" data-g="${g.id}">Löschen</button>` : ''}</div>`).join('')}
+    ${mg ? `<form data-f="newGuest" class="inline"><input type="hidden" name="s" value="${s.id}"><label>Name<input name="name" list="wl-${s.id}" placeholder="Name oder aus Warteliste wählen" required autocomplete="off"></label>
+      <datalist id="wl-${s.id}">${wl.map((w) => `<option value="${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}">`).join('')}</datalist><button class="btn">＋</button></form>` : ''}`;
   return `<div class="sdetail">
     <div class="sh"><span>Zugesagt</span><b>${inn.length}</b></div>${inn.map((k) => row(k, true)).join('') || '<p class="muted small">Niemand</p>'}
-    <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}${manage}</div>`;
+    <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}${guestBox}${manage}</div>`;
 }
 
 function viewNew() {
@@ -543,6 +550,7 @@ const A = {
   },
   async toggle(d) { S.open = S.open === d.s ? null : d.s; if (S.open) await loadDetail(S.open); render(); },
   async attend(d, el) { ok(await sb.rpc('set_attended', { p_session: d.s, p_kid: d.k, p_attended: el.checked })); },
+  async delGuest(d) { ok(await sb.from('session_guests').delete().eq('id', d.g)); await loadDetail(d.s); await refreshSessions(); },
   async cancelSession(d) { ok(await sb.from('sessions').update({ cancelled: d.v === 'true' }).eq('id', d.s)); await refreshSessions(); },
   async deleteSession(d) { if (!confirm('Termin samt Anmeldungen löschen?')) return; ok(await sb.from('sessions').delete().eq('id', d.s)); S.open = null; await refreshSessions(); },
   async kidDay(d) {
@@ -652,6 +660,16 @@ const F = {
     const { data, error } = await sb.auth.verifyOtp({ email: S.login.email, token: f.token.trim(), type: 'email' });
     if (error) throw error;
     S.user = data.user; await afterLogin(); render();
+  },
+  async newGuest(f) {
+    const name = f.name.trim(); if (!name) return;
+    const w = (S.waitlist || []).find((x) => [x.first_name, x.last_name].filter(Boolean).join(' ').toLowerCase() === name.toLowerCase());
+    ok(await sb.from('session_guests').insert({ session_id: f.s, name, waitlist_id: w?.id || null }));
+    if (w && can('waitlist_manage')) {
+      const ses = S.sessions.find((x) => x.id === f.s);
+      await sb.from('waitlist').update({ trial: true, trial_on: ses ? dkey(ses.starts_at) : null }).eq('id', w.id);
+    }
+    toast('Schnupperkind eingetragen'); await loadDetail(f.s); await refreshSessions();
   },
   async newSeries(f) {
     if (!f.tue && !f.fri) throw new Error('Bitte Dienstag und/oder Freitag wählen.');
