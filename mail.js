@@ -212,6 +212,7 @@ export function initMail(ctx) {
     let q = sb.from('mail_messages').select('*').eq('thread_key', key).order('sent_at', { ascending: true });
     q = ['trash', 'spam'].includes(M.folder) && !M.q ? q.eq('folder', M.folder) : q.not('folder', 'in', '(trash,spam)');
     const { data, error } = await q; if (error) throw error;
+    if (!(data || []).length) { M.open = null; M.thread = []; paint(); return; }
     if (!M.open) M.listY = window.scrollY;
     M.open = key; M.thread = data || [];
     if (!keepScroll) { M.expanded = {}; window.scrollTo(0, 0); }
