@@ -25,8 +25,8 @@ const ok = (r) => { if (r.error) throw r.error; return r.data; };
 // Weihnachtsferien Baden-Württemberg (Quelle: Kultusministerium BW); in diesem Zeitraum findet kein Training statt
 const XMAS = [['2026-12-23', '2027-01-09'], ['2027-12-23', '2028-01-08'], ['2028-12-23', '2029-01-05'], ['2029-12-22', '2030-01-05']];
 const inXmas = (ds) => XMAS.some(([a, b]) => ds >= a && ds <= b);
-const DAY = { tue: 'Dienstag', fri: 'Freitag' };
-const inGroup = (k, g) => (g === 'tue' ? k.tue : k.fri);
+const DAY = { tue: 'Dienstag', fri: 'Freitag', all: 'Alle Gruppen' };
+const inGroup = (k, g) => (g === 'all' ? k.tue || k.fri : g === 'tue' ? k.tue : k.fri);
 const STATUS = { waiting: 'Wartet', invited: 'Eingeladen', accepted: 'Zugesagt', declined: 'Abgesagt', no_reply: 'Keine Rückmeldung' };
 
 const PERMS = {
@@ -256,7 +256,7 @@ function sessionHead(s) {
   const wd = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
   return `<div class="srow${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
     <div class="sinfo"><div><b>${esc(s.title)}</b>${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}</div>
-    <div class="muted small">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.location ? ' · ' + esc(s.location) : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div>
+    <div class="muted small">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.grp === 'all' ? ' · Alle Gruppen' : ''}${s.location ? ' · ' + esc(s.location) : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div>
     ${can('registrations_view') ? `<div class="scount"><b>${c.going}</b><small>dabei</small></div>` : ''}</div>`;
 }
 
@@ -296,7 +296,7 @@ function viewTermineList() {
   const tr = can('registrations_view');
   const chips = tr ? `<div class="chips">${[['all', 'Alle'], ['tue', 'Dienstag'], ['fri', 'Freitag']].map(([k, l]) => `<button class="chip ${S.dayFilter === k ? 'on' : ''}" data-a="dayFilter" data-v="${k}">${l}</button>`).join('')}</div>` : '';
   const past = S.showPast;
-  const vis = visibleSessions().filter((s) => !tr || S.dayFilter === 'all' || s.grp === S.dayFilter);
+  const vis = visibleSessions().filter((s) => !tr || S.dayFilter === 'all' || s.grp === S.dayFilter || s.grp === 'all');
   const up = upcoming(vis);
   const list = past ? vis.filter((s) => !up.includes(s)).reverse() : up;
   const pastBtn = `<div class="btns"><button class="link" data-a="showPast">${past ? '‹ Zurück zu kommenden Terminen' : 'Vergangene Termine anzeigen'}</button></div>`;
@@ -360,7 +360,7 @@ function detailTrainer(s) {
   const row = (k, going) => `<div class="prow">${avatar()}<span class="pn">${esc(k.name)}</span>
     ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
     ${btn(k, 'yes', going, '👍')}${btn(k, 'no', !going, '👎')}</div>`;
-  const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
+  const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="setGrp" data-s="${s.id}" data-v="${s.grp === 'all' ? (new Date(s.starts_at).getDay() === 5 ? 'fri' : 'tue') : 'all'}">${s.grp === 'all' ? 'Nur ' + (new Date(s.starts_at).getDay() === 5 ? 'Freitag' : 'Dienstag') : 'Für beide Gruppen öffnen'}</button><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
   const gl = S.guests[s.id] || [];
   const wl = (S.waitlist || []).filter((w) => ['waiting', 'invited'].includes(w.status));
   const guestBox = `<div class="sh"><span>Schnupperkinder</span><b>${gl.length}</b></div>
@@ -383,7 +383,7 @@ function viewNew() {
     <button class="btn big">Anlegen</button></form></div>
     <details class="card"><summary>Einzelner Termin (anderer Tag, Zusatztraining)</summary><form data-f="newSession">
     <label>Titel<input name="title" value="Training" required></label>
-    <label>Gruppe<select name="grp"><option value="tue">Dienstag</option><option value="fri">Freitag</option></select></label>
+    <label>Gruppe<select name="grp"><option value="tue">Dienstag</option><option value="fri">Freitag</option><option value="all">Beide Gruppen</option></select></label>
     <label>Datum<input name="date" type="date" required></label>
     <label>Beginn<input name="start" type="time" value="17:30" required></label><label>Ende<input name="end" type="time" value="20:00" required></label>
     <label>Ort<input name="location"></label><label>Hinweis<input name="note"></label><button class="btn big">Anlegen</button></form></details>`;
@@ -550,6 +550,7 @@ const A = {
   },
   async toggle(d) { S.open = S.open === d.s ? null : d.s; if (S.open) await loadDetail(S.open); render(); },
   async attend(d, el) { ok(await sb.rpc('set_attended', { p_session: d.s, p_kid: d.k, p_attended: el.checked })); },
+  async setGrp(d) { ok(await sb.from('sessions').update({ grp: d.v }).eq('id', d.s)); toast('Gespeichert'); await refreshSessions(); },
   async delGuest(d) { ok(await sb.from('session_guests').delete().eq('id', d.g)); await loadDetail(d.s); await refreshSessions(); },
   async cancelSession(d) { ok(await sb.from('sessions').update({ cancelled: d.v === 'true' }).eq('id', d.s)); await refreshSessions(); },
   async deleteSession(d) { if (!confirm('Termin samt Anmeldungen löschen?')) return; ok(await sb.from('sessions').delete().eq('id', d.s)); S.open = null; await refreshSessions(); },

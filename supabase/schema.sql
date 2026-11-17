@@ -52,7 +52,7 @@ create table public.guardians (
 create table public.sessions (
   id uuid primary key default gen_random_uuid(),
   title text not null default 'Trampolin Training',
-  grp text not null default 'tue' check (grp in ('tue','fri')),   -- Trainingsgruppe: Dienstag oder Freitag
+  grp text not null default 'tue' check (grp in ('tue','fri','all')),   -- Trainingsgruppe: Dienstag, Freitag oder 'all' (beide)
   starts_at timestamptz not null,
   location text,
   note text,
@@ -152,7 +152,7 @@ begin
   -- Eltern dürfen nur für Trainings der Gruppe ihres Kindes zu-/absagen
   if not has_perm('registrations_manage') and not exists (
       select 1 from kids k join sessions s on s.id = p_session
-      where k.id = p_kid and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri))) then
+      where k.id = p_kid and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri) or (s.grp = 'all' and (k.tue or k.fri)))) then
     raise exception 'Dieses Kind trainiert an diesem Tag nicht';
   end if;
 
@@ -175,9 +175,9 @@ end $$;
 create function public.session_counts() returns table (session_id uuid, going int)
 language sql stable security definer set search_path = public as $$
   select s.id,
-    (select count(*) from kids k where k.active and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri)))::int
+    (select count(*) from kids k where k.active and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri) or (s.grp = 'all' and (k.tue or k.fri))))::int
     - (select count(*) from registrations r join kids k on k.id = r.kid_id
-       where r.session_id = s.id and r.status = 'declined' and k.active and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri)))::int
+       where r.session_id = s.id and r.status = 'declined' and k.active and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri) or (s.grp = 'all' and (k.tue or k.fri))))::int
   from sessions s
 $$;
 
