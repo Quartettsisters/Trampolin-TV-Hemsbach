@@ -575,6 +575,7 @@ const A = {
   async answer(d) {
     const r = ok(await sb.rpc('set_response', { p_session: d.s, p_kid: d.k, p_answer: d.v }));
     toast(r === 'going' ? 'Dabei' : r === 'declined' ? 'Abgesagt' : 'Aktualisiert');
+    if (r === 'declined' && !can('registrations_manage')) sb.functions.invoke('notify-absence', { body: { session_id: d.s, kid_id: d.k } }).catch(() => {});
     await refreshSessions();
   },
   async toggle(d) { S.open = S.open === d.s ? null : d.s; if (S.open) await loadDetail(S.open); render(); },
