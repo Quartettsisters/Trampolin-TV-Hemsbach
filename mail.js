@@ -80,13 +80,13 @@ export function initMail(ctx) {
       for (let i = 0; i < rounds; i++) {
         const r = await call({ op: 'sync' });
         if (r.pending > 0) { M.status = `Postfach wird eingerichtet… noch ${r.pending} Mails`; paintBar(); } else break;
-        if (i % 3 === 2) { await loadList(); paint(); }
+        if (i % 3 === 2) { await loadList(); paint(true); }
       }
       M.status = ''; M.lastSync = Date.now();
     } catch (e) { M.status = 'Aktualisieren fehlgeschlagen: ' + e.message; }
-    M.syncing = false;
+    M.syncing = false; paintBar();
     try { await loadList(); await loadUnread(); if (M.open) await openThread(M.open, true); } catch (e) { console.error(e); }
-    paint();
+    paint(true);
   }
 
   /* ---------- Gruppieren ---------- */
@@ -189,9 +189,16 @@ export function initMail(ctx) {
     else if (!M.syncing && Date.now() - M.lastSync > 45000) setTimeout(() => sync(8), 0);
     return `<div id="mail-bar">${M.open ? '' : bar()}</div><div id="mail-body">${body()}</div>`;
   }
-  function paint() {
+  function paint(onlyIfChanged = false) {
     const b = $('#mail-body'); if (!b) return;
-    b.innerHTML = body(); $('#mail-bar').innerHTML = M.open ? '' : bar(); afterRender();
+    const sig = JSON.stringify([M.open, M.folder, M.filter, M.loaded, M.msgs.map((m) => [m.id, m.seen, m.flagged, m.done, m.claimed_by, m.answered]), M.thread.map((m) => [m.id, m.seen, m.flagged, m.done]), M.unread, M.expanded, M.imgs]);
+    if (onlyIfChanged && sig === M.sig) return; // nichts Neues: nicht neu zeichnen (sonst springt die Ansicht)
+    M.sig = sig;
+    const y = window.scrollY, bar0 = $('#mail-bar'), searching = document.activeElement?.id === 'mailq';
+    b.innerHTML = body();
+    if (!searching) bar0.innerHTML = M.open ? '' : bar();
+    window.scrollTo(0, y);
+    afterRender();
   }
   function afterRender() {
     document.querySelectorAll('iframe.mbody').forEach((f) => {
@@ -205,6 +212,7 @@ export function initMail(ctx) {
     let q = sb.from('mail_messages').select('*').eq('thread_key', key).order('sent_at', { ascending: true });
     q = ['trash', 'spam'].includes(M.folder) && !M.q ? q.eq('folder', M.folder) : q.not('folder', 'in', '(trash,spam)');
     const { data, error } = await q; if (error) throw error;
+    if (!M.open) M.listY = window.scrollY;
     M.open = key; M.thread = data || [];
     if (!keepScroll) { M.expanded = {}; window.scrollTo(0, 0); }
     paint();
@@ -299,7 +307,7 @@ export function initMail(ctx) {
     mailFilter(d) { M.filter = d.f; paint(); },
     async mailRefresh() { M.lastSync = 0; await sync(); },
     async mailOpen(d) { await openThread(d.k); },
-    mailBack() { M.open = null; M.thread = []; paint(); },
+    mailBack() { M.open = null; M.thread = []; paint(); window.scrollTo(0, M.listY || 0); },
     mailToggle(d) { const m = find(d.id); const cur = M.expanded[d.id] ?? M.thread.indexOf(m) === M.thread.length - 1; M.expanded[d.id] = !cur; paint(); },
     mailImgs(d) { M.imgs[d.id] = true; paint(); },
     async mailAtt(d, el) {
