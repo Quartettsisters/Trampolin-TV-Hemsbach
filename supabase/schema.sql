@@ -347,3 +347,7 @@ end $$;
 
 revoke all on function public.create_staff_invite, public.redeem_staff_invite from public, anon;
 grant execute on function public.create_staff_invite, public.redeem_staff_invite to authenticated;
+
+-- ---------- Endzeit der Trainings, Geburtstag der Kinder ----------
+alter table public.sessions add column ends_at timestamptz;
+alter table public.kids add column birthdate date;

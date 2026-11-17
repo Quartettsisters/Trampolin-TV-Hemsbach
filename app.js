@@ -10,6 +10,9 @@ const app = $('#app');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (iso) => new Date(iso).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('de-DE') : '');
+const dkey = (d) => new Date(d).toLocaleDateString('sv-SE'); // YYYY-MM-DD in lokaler Zeit
+const tm = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+const mondayOf = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
 const ageOf = (d) => {
   if (!d) return '';
   const b = new Date(d), n = new Date();
@@ -19,6 +22,9 @@ const ageOf = (d) => {
 };
 const ok = (r) => { if (r.error) throw r.error; return r.data; };
 
+// Weihnachtsferien Baden-Württemberg (Quelle: Kultusministerium BW); in diesem Zeitraum findet kein Training statt
+const XMAS = [['2026-12-23', '2027-01-09'], ['2027-12-23', '2028-01-08'], ['2028-12-23', '2029-01-05'], ['2029-12-22', '2030-01-05']];
+const inXmas = (ds) => XMAS.some(([a, b]) => ds >= a && ds <= b);
 const DAY = { tue: 'Dienstag', fri: 'Freitag' };
 const inGroup = (k, g) => (g === 'tue' ? k.tue : k.fri);
 const STATUS = { waiting: 'Wartet', invited: 'Eingeladen', accepted: 'Zugesagt', declined: 'Abgesagt', no_reply: 'Keine Rückmeldung' };
@@ -47,6 +53,7 @@ const S = {
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
   inviteCode: '', invites: [], invite: null, lastInvite: null,
   activity: {}, openKid: null, kidFilter: 'all', kidView: 'list',
+  termView: 'cal', calMode: 'month', calMonth: { y: new Date().getFullYear(), m: new Date().getMonth() }, calWeek: mondayOf(new Date()), calDay: dkey(new Date()),
 };
 
 function toast(msg) {
@@ -123,7 +130,7 @@ async function afterLogin() {
 }
 
 async function loadAll() {
-  const since = new Date(Date.now() - 3 * 3600e3).toISOString();
+  const since = new Date(Date.now() - 100 * 864e5).toISOString();
   const [ses, cnt, regs, msgs, gd] = await Promise.all([
     sb.from('sessions').select('*').gte('starts_at', since).order('starts_at'),
     sb.rpc('session_counts'), sb.rpc('my_registrations'),
@@ -189,7 +196,7 @@ function render() {
 }
 
 function viewInvite() {
-  return `<div class="card"><h1>🤸 Trampolin Training</h1><h2>Einladung ins Team</h2>
+  return `<div class="card"><h1>Willkommen</h1><h2>Einladung ins Team</h2>
     <p>Du wurdest eingeladen, bei den Trainern mitzumachen.</p>
     <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst und tippe danach hier auf den Knopf.</p>
     <button class="btn big" data-a="acceptInvite">Einladung annehmen</button></div>`;
@@ -197,7 +204,7 @@ function viewInvite() {
 
 function viewPick() {
   const kids = S.overview.map((k) => `<button class="kidbtn" data-a="pickKid" data-id="${esc(k.id)}" data-name="${esc(k.name)}">${esc(k.name)}</button>`).join('');
-  return `<div class="card"><h1>🤸 Trampolin Training</h1>
+  return `<div class="card"><h1>Willkommen</h1>
     <h2>Wer ist dein Kind?</h2>
     ${S.overviewError ? `<p class="err">${esc(S.overviewError)}</p>` : `<div class="kidlist">${kids}</div>`}
     <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst. Danach tippst du hier dein Kind an. Weitere Kinder kannst du später hinzufügen.</p>
@@ -214,7 +221,7 @@ function viewLogin() {
        <label>Code aus der Mail<input name="token" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>
        <button class="btn big">Anmelden</button>
        <button type="button" class="link" data-a="toEmail">Andere Mailadresse</button></form>`;
-  return `<div class="card"><h1>🤸 Trampolin Training</h1>${who}${form}
+  return `<div class="card"><h1>Willkommen</h1>${who}${form}
     ${S.code && L.step === 'email' ? '<button class="link" data-a="backPick">Zurück zur Kinder-Auswahl</button>' : ''}
     <p class="muted small">Du bleibst danach auf diesem Gerät angemeldet.</p></div>`;
 }
@@ -230,44 +237,99 @@ function viewMain() {
     ['profil', '👤', 'Profil', true],
   ].filter((t) => t[3]);
   if (!tabs.some((t) => t[0] === S.tab)) S.tab = 'termine';
-  const body = { termine: can('registrations_view') ? viewTermineTrainer : viewTermineParent, neu: viewNew, interessenten: viewWaitlist, kinder: viewKids, nutzer: viewUsers, news: viewNews, profil: viewProfile }[S.tab]();
+  const body = { termine: viewTermine, neu: viewNew, interessenten: viewWaitlist, kinder: viewKids, nutzer: viewUsers, news: viewNews, profil: viewProfile }[S.tab]();
   return `<main>${body}</main><nav>${tabs.map(([k, i, l]) => `<button class="${S.tab === k ? 'on' : ''}" data-a="tab" data-t="${k}"><span>${i}</span>${l}</button>`).join('')}</nav>`;
 }
 
 function sessionHead(s) {
   const c = S.counts[s.id] || { going: 0 };
   return `<div class="shead"><div><b>${esc(s.title)}</b> <span class="badge gray">${DAY[s.grp]}</span>${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}<br>
-    <span class="muted">${fmt(s.starts_at)}${s.location ? ' · ' + esc(s.location) : ''}</span>${s.note ? `<br><span class="small">${esc(s.note)}</span>` : ''}</div>
+    <span class="muted">${fmt(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.location ? ' · ' + esc(s.location) : ''}</span>${s.note ? `<br><span class="small">${esc(s.note)}</span>` : ''}</div>
     <div class="cnt"><b>${c.going}</b><br><span class="small muted">zugesagt</span></div></div>`;
 }
 
-function viewTermineParent() {
-  const mine = S.sessions.filter((s) => S.myKids.some((k) => inGroup(k, s.grp)));
-  if (S.myKids.length && S.myKids.every((k) => !k.tue && !k.fri)) return '<p class="muted center">Die Trainingstage deines Kindes (Dienstag/Freitag) sind noch nicht eingetragen. Bitte kurz bei den Trainern melden.</p>';
-  if (!mine.length) return '<p class="muted center">Noch keine Termine.</p>';
-  return mine.map((s) => {
-    const rows = S.myKids.filter((k) => inGroup(k, s.grp)).map((k) => {
-      const r = S.regs.find((x) => x.session_id === s.id && x.kid_id === k.id);
-      const st = r?.status;
-      const badge = st === 'going' ? '<span class="badge green">Dabei</span>'
-        : st === 'declined' ? '<span class="badge red">Abgesagt</span>' : '<span class="badge gray">Keine Antwort</span>';
-      const btns = s.cancelled ? '' : `<div class="btns">
-        <button class="btn ${st === 'going' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">Zusagen</button>
-        <button class="btn ghost ${st === 'declined' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="no">Absagen</button></div>`;
-      return `<div class="kidrow"><div><b>${esc(k.name)}</b> ${badge}</div>${btns}</div>`;
-    }).join('') || '<p class="muted small">Noch kein Kind verknüpft (Profil → Kind hinzufügen).</p>';
-    return `<div class="card">${sessionHead(s)}${rows}</div>`;
-  }).join('');
+const upcoming = (list) => list.filter((s) => new Date(s.starts_at) >= new Date(Date.now() - 3 * 3600e3));
+function visibleSessions() {
+  if (can('registrations_view')) return S.sessions;
+  return S.sessions.filter((s) => S.myKids.some((k) => inGroup(k, s.grp)));
 }
 
-function viewTermineTrainer() {
-  const chips = [['all', 'Alle'], ['tue', 'Dienstag'], ['fri', 'Freitag']].map(([k, l]) => `<button class="chip ${S.dayFilter === k ? 'on' : ''}" data-a="dayFilter" data-v="${k}">${l}</button>`).join('');
-  const list = S.sessions.filter((s) => S.dayFilter === 'all' || s.grp === S.dayFilter);
-  if (!list.length) return `<div class="chips">${chips}</div><p class="muted center">Keine Termine.${can('sessions_manage') ? ' Lege unter „Neu“ welche an.' : ''}</p>`;
-  return `<div class="chips">${chips}</div>` + list.map((s) => {
-    const open = S.open === s.id;
-    return `<div class="card"><div data-a="toggle" data-s="${s.id}" class="click">${sessionHead(s)}</div>${open ? detailTrainer(s) : ''}</div>`;
+function sessionCardParent(s) {
+  const rows = S.myKids.filter((k) => inGroup(k, s.grp)).map((k) => {
+    const r = S.regs.find((x) => x.session_id === s.id && x.kid_id === k.id);
+    const st = r?.status;
+    const badge = st === 'going' ? '<span class="badge green">Dabei</span>'
+      : st === 'declined' ? '<span class="badge red">Abgesagt</span>' : '<span class="badge gray">Keine Antwort</span>';
+    const btns = s.cancelled ? '' : `<div class="btns">
+      <button class="btn ${st === 'going' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">Zusagen</button>
+      <button class="btn ghost ${st === 'declined' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="no">Absagen</button></div>`;
+    return `<div class="kidrow"><div><b>${esc(k.name)}</b> ${badge}</div>${btns}</div>`;
   }).join('');
+  return `<div class="card">${sessionHead(s)}${rows}</div>`;
+}
+function sessionCardTrainer(s) {
+  return `<div class="card"><div data-a="toggle" data-s="${s.id}" class="click">${sessionHead(s)}</div>${S.open === s.id ? detailTrainer(s) : ''}</div>`;
+}
+const sessionCard = (s) => (can('registrations_view') ? sessionCardTrainer(s) : sessionCardParent(s));
+
+function parentHint() {
+  if (can('registrations_view')) return '';
+  if (!S.myKids.length) return '<p class="muted center">Noch kein Kind verknüpft (Profil → Kind hinzufügen).</p>';
+  if (S.myKids.every((k) => !k.tue && !k.fri)) return '<p class="muted center">Die Trainingstage deines Kindes (Dienstag/Freitag) sind noch nicht eingetragen. Bitte kurz bei den Trainern melden.</p>';
+  return '';
+}
+
+function viewTermineList() {
+  const hint = parentHint(); if (hint) return hint;
+  const tr = can('registrations_view');
+  const chips = tr ? `<div class="chips">${[['all', 'Alle'], ['tue', 'Dienstag'], ['fri', 'Freitag']].map(([k, l]) => `<button class="chip ${S.dayFilter === k ? 'on' : ''}" data-a="dayFilter" data-v="${k}">${l}</button>`).join('')}</div>` : '';
+  const list = upcoming(visibleSessions()).filter((s) => !tr || S.dayFilter === 'all' || s.grp === S.dayFilter);
+  if (!list.length) return `${chips}<p class="muted center">Keine Termine.${can('sessions_manage') ? ' Lege unter „Neu“ welche an.' : ''}</p>`;
+  return chips + list.map(sessionCard).join('');
+}
+
+const bdaysOn = (d) => S.allKids.filter((k) => k.active && k.birthdate && new Date(k.birthdate).getMonth() === d.getMonth() && new Date(k.birthdate).getDate() === d.getDate());
+const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+function viewCalendar() {
+  const hint = parentHint(); if (hint) return hint;
+  const by = {};
+  visibleSessions().forEach((s) => { (by[dkey(s.starts_at)] ||= []).push(s); });
+  const today = dkey(new Date());
+  const month = S.calMode === 'month';
+  const MN = new Date(S.calMonth.y, S.calMonth.m, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  const wk0 = S.calWeek, wk6 = new Date(wk0.getFullYear(), wk0.getMonth(), wk0.getDate() + 6);
+  const title = month ? MN : `${wk0.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} – ${wk6.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+  const head = `<div class="calhead"><div><button class="circ" data-a="calNav" data-d="-1">‹</button><button class="circ" data-a="calNav" data-d="1">›</button></div>
+    <b>${esc(title)}</b><div class="seg"><button class="${month ? 'on' : ''}" data-a="calMode" data-v="month">Monat</button><button class="${month ? '' : 'on'}" data-a="calMode" data-v="week">Woche</button></div></div>`;
+  let grid;
+  if (month) {
+    const { y, m } = S.calMonth;
+    const first = new Date(y, m, 1), off = (first.getDay() + 6) % 7, total = Math.ceil((off + new Date(y, m + 1, 0).getDate()) / 7) * 7;
+    const cells = Array.from({ length: total }, (_, i) => new Date(y, m, 1 - off + i)).map((d) => {
+      const k = dkey(d);
+      const chips = (by[k] || []).map((s) => `<div class="cs ${s.grp}${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}</div>`).join('');
+      const bd = bdaysOn(d).map((x) => `<div class="bd">🎂 ${esc(x.name.split(' ')[0])}</div>`).join('');
+      return `<div class="cd ${d.getMonth() !== m ? 'oth' : ''} ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><span class="dn">${d.getDate()}</span>${chips}${bd}</div>`;
+    }).join('');
+    grid = `<div class="cal">${WD.map((w) => `<div class="cw">${w}</div>`).join('')}${cells}</div>`;
+  } else {
+    grid = Array.from({ length: 7 }, (_, i) => new Date(wk0.getFullYear(), wk0.getMonth(), wk0.getDate() + i)).map((d) => {
+      const k = dkey(d);
+      const ss = (by[k] || []).map((s) => `<div class="cs wide ${s.grp}${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''} ${esc(s.title)} · ${DAY[s.grp]}${s.cancelled ? ' (abgesagt)' : ''}</div>`).join('');
+      const bd = bdaysOn(d).map((x) => `<div class="bd">🎂 ${esc(x.name)}</div>`).join('');
+      return `<div class="wrow ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><b>${WD[(d.getDay() + 6) % 7]} ${d.getDate()}.${d.getMonth() + 1}.</b><div>${ss || '<span class="muted small">–</span>'}${bd}</div></div>`;
+    }).join('');
+  }
+  const day = S.calDay ? (by[S.calDay] || []) : [];
+  const dd = S.calDay ? new Date(S.calDay + 'T12:00') : null;
+  const panel = dd ? `<h3>${dd.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' })}</h3>${day.map(sessionCard).join('') || '<p class="muted small">Kein Training an diesem Tag.</p>'}` : '';
+  return head + grid + panel;
+}
+
+function viewTermine() {
+  const seg = `<div class="chips"><button class="chip ${S.termView === 'cal' ? 'on' : ''}" data-a="termView" data-v="cal">📅 Kalender</button><button class="chip ${S.termView === 'list' ? 'on' : ''}" data-a="termView" data-v="list">☰ Liste</button></div>`;
+  return seg + (S.termView === 'cal' ? viewCalendar() : viewTermineList());
 }
 
 function detailTrainer(s) {
@@ -293,14 +355,20 @@ function detailTrainer(s) {
 }
 
 function viewNew() {
-  return `<div class="card"><h2>Neues Training</h2><form data-f="newSession">
-    <label>Titel<input name="title" value="Trampolin Training" required></label>
-    <label>Gruppe<select name="grp"><option value="tue">Dienstag</option><option value="fri">Freitag</option></select></label>
-    <label>Beginn<input name="starts" type="datetime-local" required></label>
+  const today = dkey(new Date());
+  return `<div class="card"><h2>Trainings anlegen</h2><p class="small muted">Legt alle Dienstage und/oder Freitage im Zeitraum an, standardmäßig 17:30–20:00 Uhr. Ausfälle (Ferien, Feiertage) danach einzeln absagen oder löschen. Schon vorhandene Tage werden übersprungen.</p>
+    <form data-f="newSeries"><label class="line"><input type="checkbox" name="tue" checked> Dienstag</label><label class="line"><input type="checkbox" name="fri" checked> Freitag</label>
+    <label>Von<input name="from" type="date" value="${today}" required></label><label>Bis<input name="to" type="date" required></label>
+    <label>Beginn<input name="start" type="time" value="17:30" required></label><label>Ende<input name="end" type="time" value="20:00" required></label>
     <label>Ort<input name="location"></label>
-    <label>Hinweis<input name="note"></label>
-    <label>Wöchentlich wiederholen (Anzahl Termine insgesamt)<input name="repeat" type="number" min="1" max="52" value="1"></label>
-    <button class="btn big">Anlegen</button></form></div>`;
+    <label class="line"><input type="checkbox" name="skipXmas" checked> Baden-Württembergische Weihnachtsferien auslassen (23.12.–09.01.)</label>
+    <button class="btn big">Anlegen</button></form></div>
+    <details class="card"><summary>Einzelner Termin (anderer Tag, Zusatztraining)</summary><form data-f="newSession">
+    <label>Titel<input name="title" value="Training" required></label>
+    <label>Gruppe<select name="grp"><option value="tue">Dienstag</option><option value="fri">Freitag</option></select></label>
+    <label>Datum<input name="date" type="date" required></label>
+    <label>Beginn<input name="start" type="time" value="17:30" required></label><label>Ende<input name="end" type="time" value="20:00" required></label>
+    <label>Ort<input name="location"></label><label>Hinweis<input name="note"></label><button class="btn big">Anlegen</button></form></details>`;
 }
 
 function wlFiltered() {
@@ -397,8 +465,9 @@ function viewKids() {
     return `<div class="mrow"><div class="mmain ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
       <div class="minfo"><div><b>${esc(k.name)}</b> ${kidTags(k)}</div><div class="msub">${sub}</div></div>${mg ? '<span class="chev">›</span>' : ''}</div>
       ${open ? `<div class="mdetail"><div class="btns"><button class="chip ${k.tue ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="tue">Dienstag</button><button class="chip ${k.fri ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="fri">Freitag</button></div>
-        <p class="small">${k.phone ? `📞 ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}</p>
+        <p class="small">${k.phone ? `📞 ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}<br>${k.birthdate ? `🎂 ${fmtDate(k.birthdate)} (${ageOf(k.birthdate)} Jahre)` : '<span class="muted">Kein Geburtstag eingetragen</span>'}</p>
         <div class="btns"><button class="btn small ghost" data-a="kidPhone" data-id="${k.id}">Telefon ändern</button>
+        <button class="btn small ghost" data-a="kidBirthday" data-id="${k.id}">Geburtstag</button>
         <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Inaktiv setzen' : 'Wieder aktivieren'}</button></div></div>` : ''}</div>`;
   }).join('') || '<p class="muted">Keine Einträge.</p>';
   const staff = can('users_manage') ? S.users.filter((u) => (u.email || u.display_name) && S.roles.find((r) => r.id === u.role_id)?.name !== 'Eltern') : [];
@@ -408,7 +477,7 @@ function viewKids() {
     <div class="btns"><a class="btn" target="_blank" rel="noopener" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Hallo! Hier ist die Trampolin-App vom TV Hemsbach. Link öffnen und dein Kind antippen, mehr ist nicht nötig:\n${location.origin}${location.pathname}?c=${S.inviteCode}`)}`)}">Per WhatsApp teilen</a>
     <button class="btn ghost" data-a="copyLink">Link kopieren</button><button class="btn ghost" data-a="rotate">Neuen Code erzeugen</button></div>
     <p class="small muted">Wer den Link hat, sieht die Vornamen der Kinder. Nur in der Gruppe teilen.</p></div>` : '';
-  const form = mg ? `<details class="card"><summary>Neues Kind anlegen</summary><form data-f="newKid"><label>Name (z. B. „Mia K.“)<input name="name" required></label><label>Telefon (mehrere mit ; trennen)<input name="phone"></label>
+  const form = mg ? `<details class="card"><summary>Neues Kind anlegen</summary><form data-f="newKid"><label>Name (z. B. „Mia K.“)<input name="name" required></label><label>Telefon (mehrere mit ; trennen)<input name="phone"></label><label>Geburtstag<input name="birthdate" type="date"></label>
     <label class="line"><input type="checkbox" name="tue"> Dienstag</label><label class="line"><input type="checkbox" name="fri"> Freitag</label><button class="btn">Kind anlegen</button></form></details>` : '';
   return `${link}${team}<div class="card"><h2>Kinder</h2><div class="chips">${chips}${toggle}</div>${rows}</div>${form}`;
 }
@@ -472,6 +541,24 @@ const A = {
   dayFilter(d) { S.dayFilter = d.v; render(); },
   kidFilter(d) { S.kidFilter = d.v; render(); },
   kidView(d) { S.kidView = d.v; render(); },
+  termView(d) { S.termView = d.v; render(); },
+  calMode(d) { S.calMode = d.v; render(); },
+  calDay(d) { S.calDay = d.k; S.open = null; render(); },
+  calNav(d) {
+    const n = +d.d;
+    if (S.calMode === 'month') { const x = new Date(S.calMonth.y, S.calMonth.m + n, 1); S.calMonth = { y: x.getFullYear(), m: x.getMonth() }; }
+    else S.calWeek = new Date(S.calWeek.getFullYear(), S.calWeek.getMonth(), S.calWeek.getDate() + 7 * n);
+    render();
+  },
+  async kidBirthday(d) {
+    const k = S.allKids.find((x) => x.id === d.id);
+    const cur = k?.birthdate ? new Date(k.birthdate).toLocaleDateString('de-DE') : '';
+    const v = prompt('Geburtstag (TT.MM.JJJJ)', cur); if (v === null) return;
+    const m = v.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (v.trim() && !m) throw new Error('Bitte so eingeben: 24.03.2015');
+    ok(await sb.from('kids').update({ birthdate: m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null }).eq('id', d.id));
+    await loadAll(); render();
+  },
   openKid(d) { S.openKid = S.openKid === d.id ? null : d.id; render(); },
   async kidActive(d) { ok(await sb.from('kids').update({ active: d.v === 'true' }).eq('id', d.id)); await loadAll(); render(); },
   async kidPhone(d) {
@@ -530,7 +617,7 @@ const A = {
     const w = S.waitlist.find((x) => x.id === d.id);
     const name = `${w.first_name}${w.last_name ? ' ' + w.last_name.trim()[0] + '.' : ''}`;
     if (!confirm(`„${name}“ als Teilnehmer anlegen?`)) return;
-    ok(await sb.from('kids').insert({ name, phone: w.phone, tue: !!w.tue, fri: !!w.fri }));
+    ok(await sb.from('kids').insert({ name, phone: w.phone, birthdate: w.birthdate, tue: !!w.tue, fri: !!w.fri }));
     ok(await sb.from('waitlist').update({ status: 'accepted' }).eq('id', d.id));
     await loadAll(); render(); toast('Als Teilnehmer angelegt');
   },
@@ -554,16 +641,27 @@ const F = {
     if (error) throw error;
     S.user = data.user; await afterLogin(); render();
   },
-  async newSession(f) {
-    const n = Math.max(1, +f.repeat || 1), start = new Date(f.starts);
-    const rows = Array.from({ length: n }, (_, i) => ({
-      title: f.title, grp: f.grp, location: f.location || null, note: f.note || null,
-      starts_at: new Date(start.getTime() + i * 7 * 864e5).toISOString(),
-    }));
-    // Zeitumstellung: Uhrzeit pro Woche lokal beibehalten
-    rows.forEach((r, i) => { const d = new Date(start); d.setDate(d.getDate() + 7 * i); r.starts_at = d.toISOString(); });
+  async newSeries(f) {
+    if (!f.tue && !f.fri) throw new Error('Bitte Dienstag und/oder Freitag wählen.');
+    const have = new Set(S.sessions.map((x) => `${x.grp}|${dkey(x.starts_at)}`));
+    const rows = [], end = new Date(f.to + 'T00:00'); let skipped = 0;
+    for (let d = new Date(f.from + 'T00:00'); d <= end; d.setDate(d.getDate() + 1)) {
+      const grp = d.getDay() === 2 && f.tue ? 'tue' : d.getDay() === 5 && f.fri ? 'fri' : null;
+      const ds = dkey(d);
+      if (!grp || have.has(`${grp}|${ds}`)) continue;
+      if (f.skipXmas && inXmas(ds)) { skipped++; continue; }
+      rows.push({ title: 'Training', grp, location: f.location || null,
+        starts_at: new Date(`${ds}T${f.start}`).toISOString(), ends_at: new Date(`${ds}T${f.end}`).toISOString() });
+    }
+    if (!rows.length) throw new Error('Keine neuen Termine im Zeitraum.');
+    if (rows.length > 120) throw new Error('Bitte höchstens etwa ein halbes Jahr auf einmal anlegen.');
     ok(await sb.from('sessions').insert(rows));
-    S.tab = 'termine'; await refreshSessions(); toast(`${n} Termin(e) angelegt`);
+    S.tab = 'termine'; await refreshSessions(); toast(`${rows.length} Trainings angelegt${skipped ? `, ${skipped} in den Weihnachtsferien ausgelassen` : ''}`);
+  },
+  async newSession(f) {
+    ok(await sb.from('sessions').insert({ title: f.title, grp: f.grp, location: f.location || null, note: f.note || null,
+      starts_at: new Date(`${f.date}T${f.start}`).toISOString(), ends_at: new Date(`${f.date}T${f.end}`).toISOString() }));
+    S.tab = 'termine'; await refreshSessions(); toast('Termin angelegt');
   },
   async newInvite(f) {
     const token = ok(await sb.rpc('create_staff_invite', { p_role: f.role, p_label: f.label }));
@@ -571,7 +669,7 @@ const F = {
     await loadAll(); render();
   },
   async newRole(f) { ok(await sb.from('roles').insert({ name: f.name.trim(), perms: {} })); await loadAll(); render(); toast('Rolle angelegt – Rechte darunter setzen'); },
-  async newKid(f) { ok(await sb.from('kids').insert({ name: f.name.trim(), phone: f.phone || null, tue: f.tue === 'on', fri: f.fri === 'on' })); await loadAll(); render(); },
+  async newKid(f) { ok(await sb.from('kids').insert({ name: f.name.trim(), phone: f.phone || null, birthdate: f.birthdate || null, tue: f.tue === 'on', fri: f.fri === 'on' })); await loadAll(); render(); },
   async newMsg(f) {
     ok(await sb.from('messages').insert({ title: f.title, body: f.body, author: S.user.id }));
     sb.functions.invoke('send-push', { body: { title: f.title, body: f.body } }).catch(() => {});
