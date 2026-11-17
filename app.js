@@ -546,12 +546,12 @@ function viewNew() {
     <label>Ort<input name="location"></label><label>Hinweis<input name="note"></label><button class="btn big">Anlegen</button></form></details>`;
 }
 
+const wlOrder = (a, b) => (a.requested_on || '9999').localeCompare(b.requested_on || '9999') || String(a.created_at).localeCompare(String(b.created_at));
 function wlFiltered() {
   const q = S.wlQuery.trim().toLowerCase();
   // älteste Anfrage zuerst (Warteschlange); ohne Datum ans Ende
   return S.waitlist.filter((w) => w.status === S.wlFilter &&
-    (!q || `${w.first_name} ${w.last_name} ${w.email} ${w.phone}`.toLowerCase().includes(q)))
-    .sort((a, b) => (a.requested_on || '9999').localeCompare(b.requested_on || '9999') || String(a.created_at).localeCompare(String(b.created_at)));
+    (!q || `${w.first_name} ${w.last_name} ${w.email} ${w.phone}`.toLowerCase().includes(q))).sort(wlOrder);
 }
 const waNumber = (p) => { let d = String(p || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (d.startsWith('0')) return '49' + d.slice(1); return d.length >= 10 ? d : '49' + d; };
 function cancelText(ses) {
@@ -636,10 +636,12 @@ ${sign}`;
 function wlList() {
   const list = wlFiltered();
   if (!list.length) return '<p class="muted center">Keine Einträge.</p>';
+  // Platznummer = Position in der Reihenfolge der Anfragen (bleibt bei der Suche gleich)
+  const rank = new Map(S.waitlist.filter((w) => w.status === S.wlFilter).sort(wlOrder).map((w, i) => [w.id, i + 1]));
   const tag = (w) => `${w.tue ? '<span class="tag tue">Dienstag</span>' : ''}${w.fri ? '<span class="tag fri">Freitag</span>' : ''}`;
   return `<div class="list">${list.map((w) => {
     const open = S.wlOpen === w.id;
-    const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
+    const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><span class="wlnum">${rank.get(w.id)}</span><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || (w.requested_on ? fmtDate(w.requested_on) : '–'))}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
       ${S.mailLog?.[w.id]?.length ? `<p class="small muted">Zuletzt gemailt: ${esc(fmtDate(S.mailLog[w.id][0].sent_at))} (${esc(S.mailLog[w.id][0].subject)})</p>` : ''}
       ${can('registrations_manage') && S.wlInv?.[w.id]?.length ? `<button class="link danger" data-a="withdrawInvite" data-id="${w.id}">Einladung zurücknehmen</button>` : ''}
