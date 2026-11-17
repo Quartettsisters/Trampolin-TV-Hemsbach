@@ -123,3 +123,5 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .mbox { max-width: 560px; max-height: 92vh; overflow: auto; } .mrow2 { display: flex; align-items: center; justify-content: space-between; } .mrow2 .x { font-size: 1.6rem; }
 
 .req { color: var(--p); font-weight: 800; }
+
+.kidedit { padding: 12px 0; border-top: 1px solid #e5e9e8; } .kidedit:first-of-type { border-top: 0; } .kidedit label { display: block; margin-top: 8px; } .kidedit .btn { margin-top: 10px; }

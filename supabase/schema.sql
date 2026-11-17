@@ -433,3 +433,10 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 
 -- ---------- Öffentliches Wartelisten-Formular (?w=1) ----------
 -- waitlist.source ('form' = von Eltern eingetragen); RPC submit_waitlist(...) für anon, mit Prüfungen, Dublettenschutz, Limit 15/Stunde.
+
+-- ---------- Eltern-Regeln (Migration parents_claim_rules / parents_second_guardian) ----------
+-- * claim_kid(kid, code, email): E-Mail Pflicht (wird pro Elternteil in guardians.email gespeichert).
+-- * Ein Kind kann nur von einem Elternkonto gewählt werden. kids.allow_second = true erlaubt genau ein weiteres
+--   Elternteil (wird nach dessen Wahl automatisch zurückgesetzt). kids_overview zeigt nur freie Kinder.
+-- * Freigabe: Trainer (kids_manage) löschen die guardians-Zeilen (Policy guardians_delete nur noch für kids_manage).
+-- * update_my_kid(kid, phone, birthdate, email): Eltern pflegen Telefon, Geburtstag und eigene E-Mail.

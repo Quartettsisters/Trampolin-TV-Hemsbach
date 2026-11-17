@@ -72,7 +72,7 @@ const can = (p) => !!S.perms[p];
 
 const S = {
   view: 'boot', tab: 'termine', user: null, perms: {}, roleName: '', users: [], roles: [],
-  code: null, overview: [], overviewError: '',
+  code: null, overview: [], overviewError: '', parentEmail: localStorage.getItem('tc_email') || '', guardEmails: {},
   login: { step: 'email', email: '', kid: null },
   myKids: [], allKids: [], guardCount: {},
   sessions: [], counts: {}, regs: [], messages: [],
@@ -141,7 +141,7 @@ async function init() {
 async function loadOverview() {
   const { data, error } = await sb.rpc('kids_overview', { p_code: S.code });
   S.overview = data || [];
-  S.overviewError = error ? error.message : (S.overview.length ? '' : 'Der Link ist ungültig oder abgelaufen, oder es sind noch keine Kinder angelegt.');
+  S.overviewError = error ? error.message : (S.overview.length ? '' : 'Der Link ist ungültig oder abgelaufen, oder es ist kein freies Kind mehr übrig. Bitte melde dich bei den Trainern.');
 }
 
 async function afterLogin() {
@@ -166,7 +166,7 @@ async function loadAll() {
     sb.from('sessions').select('*').gte('starts_at', since).order('starts_at'),
     sb.rpc('session_counts'), sb.rpc('my_registrations'),
     sb.from('messages').select('*').order('created_at', { ascending: false }).limit(30),
-    sb.from('guardians').select('user_id, kid_id, kids(id,name,phone,tue,fri)'),
+    sb.from('guardians').select('user_id, kid_id, email, kids(id,name,phone,tue,fri,birthdate,allow_second)'),
   ]);
   S.sessions = ok(ses);
   S.counts = Object.fromEntries(ok(cnt).map((c) => [c.session_id, c]));
@@ -175,7 +175,8 @@ async function loadAll() {
   const g = ok(gd);
   S.myKids = g.filter((x) => x.user_id === S.user.id && x.kids).map((x) => x.kids);
   S.guardCount = {};
-  g.forEach((x) => { S.guardCount[x.kid_id] = (S.guardCount[x.kid_id] || 0) + 1; });
+  S.guardEmails = {}; S.guardMine = {};
+  g.forEach((x) => { S.guardCount[x.kid_id] = (S.guardCount[x.kid_id] || 0) + 1; if (x.email) (S.guardEmails[x.kid_id] ||= []).push(x.email); if (x.user_id === S.user.id && x.email) S.guardMine[x.kid_id] = x.email; });
   const none = Promise.resolve({ data: [] });
   const [k, w, c, u, r, inv] = await Promise.all([
     can('kids_manage') || can('registrations_view') ? sb.from('kids').select('*').order('name') : can('kids_view') ? sb.rpc('kids_list') : none,
@@ -352,11 +353,22 @@ function viewInvite() {
 }
 
 function viewPick() {
+  const hasMail = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(S.parentEmail || '');
+  if (!hasMail) {
+    return `<div class="card"><h1>Willkommen</h1>
+    <h2>Deine E-Mail-Adresse</h2>
+    <p>Bitte trage zuerst deine E-Mail-Adresse ein. Das Trainerteam nutzt sie, um dich zu erreichen. Danach wählst du dein Kind.</p>
+    <form data-f="parentEmail"><label>E-Mail-Adresse <span class="req">*</span><input name="email" type="email" required autocomplete="email" value="${esc(S.parentEmail || '')}"></label>
+    <button class="btn big">Weiter</button></form>
+    <button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button></div>`;
+  }
   const kids = S.overview.map((k) => `<button class="kidbtn" data-a="pickKid" data-id="${esc(k.id)}" data-name="${esc(k.name)}">${esc(k.name)}</button>`).join('');
   return `<div class="card"><h1>Willkommen</h1>
     <h2>Wer ist dein Kind?</h2>
+    <p class="small muted">E-Mail: ${esc(S.parentEmail)} · <button class="link" data-a="changeParentMail">ändern</button></p>
     ${S.overviewError ? `<p class="err">${esc(S.overviewError)}</p>` : `<div class="kidlist">${kids}</div>`}
-    <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst. Danach tippst du hier dein Kind an. Weitere Kinder kannst du später hinzufügen.</p>
+    <p class="muted small">Dein Kind fehlt? Dann hat es vielleicht schon ein anderes Elternteil gewählt. Bitte melde dich bei den Trainern, sie können es freigeben. Jedes Kind kann nur einmal gewählt werden.</p>
+    <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst. Weitere Kinder kannst du später hinzufügen.</p>
     <button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button></div>`;
 }
 
@@ -713,6 +725,7 @@ function viewKids() {
   const rows = list.map((k) => {
     const g = S.guardCount[k.id] || 0;
     const sub = [mg ? (g ? `<span>${ic('check')} Eltern verknüpft${g > 1 ? ` (${g})` : ''}</span>` : `<span class="warn">${ic('x')} Keine Eltern verknüpft</span>`) : '',
+      k.allow_second ? '<span>Zweites Elternteil erlaubt</span>' : '',
       S.activity[k.id] ? `<span>Zuletzt ${S.activity[k.id].n} von ${S.activity[k.id].m} Trainings da</span>` : '',
       !k.tue && !k.fri ? '<span class="warn">Trainingstag fehlt</span>' : ''].filter(Boolean).join(' ');
     const open = mg && S.openKid === k.id;
@@ -722,7 +735,11 @@ function viewKids() {
         <p class="small">${k.phone ? `${ic('phone')} ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}<br>${k.birthdate ? `${ic('cake')} ${fmtDate(k.birthdate)} (${ageOf(k.birthdate)} Jahre)` : '<span class="muted">Kein Geburtstag eingetragen</span>'}</p>
         <div class="btns"><button class="btn small ghost" data-a="kidPhone" data-id="${k.id}">Telefon ändern</button>
         <button class="btn small ghost" data-a="kidBirthday" data-id="${k.id}">Geburtstag</button>
-        <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Inaktiv setzen' : 'Wieder aktivieren'}</button></div></div>` : ''}</div>`;
+        <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Inaktiv setzen' : 'Wieder aktivieren'}</button></div>
+        <p class="small">${S.guardEmails[k.id]?.length ? `${ic('mail')} ${S.guardEmails[k.id].map((m) => `<a href="mailto:${esc(m)}">${esc(m)}</a>`).join(', ')}` : '<span class="muted">Keine Eltern-E-Mail</span>'}</p>
+        <div class="btns"><button class="btn small ghost" data-a="kidSecond" data-id="${k.id}" data-v="${!k.allow_second}">${k.allow_second ? 'Zweites Elternteil: zurücknehmen' : 'Zweites Elternteil erlauben'}</button>
+        ${S.guardCount[k.id] ? `<button class="btn small ghost" data-a="kidRelease" data-id="${k.id}">Verknüpfung freigeben</button>` : ''}</div>
+        ${k.allow_second ? '<p class="small warn">Ein weiteres Elternteil kann dieses Kind jetzt einmal über den Einladungslink wählen.</p>' : ''}</div>` : ''}</div>`;
   }).join('') || '<p class="muted">Keine Einträge.</p>';
   const staff = can('users_manage') ? S.users.filter((u) => (u.email || u.display_name) && S.roles.find((r) => r.id === u.role_id)?.name !== 'Eltern') : [];
   const rtag = (n) => `<span class="tag ${n === 'Trainer' ? 'tr' : n === 'Geschäftsstelle' ? 'gs' : 'off'}">${esc(n)}</span>`;
@@ -745,12 +762,20 @@ function viewNews() {
 }
 
 function viewProfile() {
-  const kids = S.myKids.map((k) => `<div class="kidrow"><b>${esc(k.name)}</b><button class="link" data-a="unlink" data-k="${k.id}">Entfernen</button></div>`).join('') || '<p class="muted">Noch kein Kind verknüpft.</p>';
-  return `<div class="card"><h2>Meine Kinder</h2>${kids}
+  const kids = S.myKids.map((k) => {
+    const mine = S.guardMine?.[k.id] || '';
+    return `<form class="kidedit" data-f="myKid"><input type="hidden" name="id" value="${esc(k.id)}">
+      <b>${esc(k.name)}</b>
+      <label>Telefon (mehrere mit ; trennen)<input name="phone" value="${esc(k.phone || '')}" autocomplete="tel"></label>
+      <label>Geburtstag<input name="birth" type="date" value="${esc(k.birthdate || '')}"></label>
+      <label>E-Mail <span class="req">*</span><input name="email" type="email" required value="${esc(mine || S.parentEmail || '')}" autocomplete="email"></label>
+      <button class="btn small">Speichern</button></form>`;
+  }).join('') || '<p class="muted">Noch kein Kind verknüpft.</p>';
+  return `<div class="card"><h2>Meine Kinder</h2><p class="small muted">Hier kannst du die Daten pflegen, die die Trainer von deinem Kind haben. Name und Trainingstag ändern die Trainer. Falsches Kind gewählt? Bitte bei den Trainern melden.</p>${kids}
     <button class="btn" data-a="addKid">Kind hinzufügen</button></div>
     <div class="card"><h2>Benachrichtigungen</h2><button class="btn" data-a="push">Auf diesem Gerät aktivieren</button>
     <p class="small muted">iPhone: App zuerst über „Teilen → Zum Home-Bildschirm“ installieren.</p></div>
-    <div class="card"><p class="small muted">${S.user.email ? `Angemeldet als ${esc(S.user.email)}` : 'Du bist auf diesem Handy angemeldet.'} · Rolle: ${esc(S.roleName)}<br>${S.user.email ? '' : S.roleName === 'Eltern' ? 'Bei einem neuen Handy: Einladungslink aus der WhatsApp-Gruppe erneut öffnen und dein Kind antippen.' : 'Bei einem neuen Handy: neue Einladung vom Admin anfordern.'}</p><button class="btn ghost" data-a="logout">Abmelden</button></div>`;
+    <div class="card"><p class="small muted">${S.user.email ? `Angemeldet als ${esc(S.user.email)}` : 'Du bist auf diesem Handy angemeldet.'} · Rolle: ${esc(S.roleName)}<br>${S.user.email ? '' : S.roleName === 'Eltern' ? 'Bei einem neuen Handy: Einladungslink aus der WhatsApp-Gruppe erneut öffnen. Dein Kind muss dann zuerst von den Trainern freigegeben werden.' : 'Bei einem neuen Handy: neue Einladung vom Admin anfordern.'}</p><button class="btn ghost" data-a="logout">Abmelden</button></div>`;
 }
 
 /* ---------- Aktionen ---------- */
@@ -769,13 +794,15 @@ const A = {
     S.invite = null; await afterLogin(); S.tab = 'termine'; render(); toast(`Willkommen im Team (${role})`);
   },
   async delInvite(d) { ok(await sb.from('staff_invites').delete().eq('id', d.id)); await loadAll(); render(); },
+  changeParentMail() { S.parentEmail = ''; render(); },
   async pickKid(d) {
+    if (!confirm(`„${d.name}“ wählen?\n\nEin Kind kann nur einmal gewählt werden. Falls du dich vertippst, können nur die Trainer das wieder freigeben.`)) return;
     if (!S.user) {
       const { data, error } = await sb.auth.signInAnonymously();
       if (error) throw new Error('Anmeldung nicht möglich: ' + error.message);
       S.user = data.user;
     }
-    ok(await sb.rpc('claim_kid', { p_kid: d.id, p_code: S.code }));
+    ok(await sb.rpc('claim_kid', { p_kid: d.id, p_code: S.code, p_email: S.parentEmail }));
     await afterLogin(); S.tab = 'termine'; render(); toast(`${d.name} ist verknüpft`);
   },
   toLogin() { S.login = { step: 'email', email: '', kid: null }; S.view = 'login'; render(); },
@@ -858,6 +885,15 @@ const A = {
     const v = prompt('Telefonnummern (mehrere mit ; trennen, z. B. 0176 123 (Mama); 0151 456 (Papa))', k?.phone || ''); if (v === null) return;
     ok(await sb.from('kids').update({ phone: v.trim() || null }).eq('id', d.id)); await loadAll(); render();
   },
+  async kidSecond(d) {
+    ok(await sb.from('kids').update({ allow_second: d.v === 'true' }).eq('id', d.id)); await loadAll(); render();
+    toast(d.v === 'true' ? 'Zweites Elternteil kann das Kind jetzt wählen' : 'Zurückgenommen');
+  },
+  async kidRelease(d) {
+    const k = S.allKids.find((x) => x.id === d.id);
+    if (!confirm(`Alle Eltern-Verknüpfungen von „${k?.name}“ lösen?\n\nDas Kind kann danach wieder über den Einladungslink gewählt werden. Die bisherigen Eltern sehen es nicht mehr, bis sie es erneut wählen.`)) return;
+    ok(await sb.from('guardians').delete().eq('kid_id', d.id)); await loadAll(); render(); toast('Verknüpfung freigegeben');
+  },
   async copyText(d) { await navigator.clipboard.writeText(d.t); toast('Link kopiert'); },
   async copyLink() { await navigator.clipboard.writeText(`${location.origin}${location.pathname}?c=${S.inviteCode}`); toast('Link kopiert'); },
   async rotate() {
@@ -865,7 +901,6 @@ const A = {
     S.inviteCode = ok(await sb.rpc('rotate_invite_code')); render(); toast('Neuer Code erzeugt');
   },
   async delMsg(d) { ok(await sb.from('messages').delete().eq('id', d.id)); await loadAll(); render(); },
-  async unlink(d) { if (!confirm('Kind von deinem Konto entfernen?')) return; ok(await sb.from('guardians').delete().eq('user_id', S.user.id).eq('kid_id', d.k)); await loadAll(); render(); },
   async addKid() {
     if (!S.code) return toast('Bitte den Einladungslink aus der Gruppe erneut öffnen.');
     await loadOverview();
@@ -957,6 +992,15 @@ const A = {
 };
 
 const F = {
+  async parentEmail(f) {
+    const e = f.email.trim().toLowerCase();
+    if (!/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(e)) throw new Error('Bitte eine gültige E-Mail-Adresse eingeben.');
+    S.parentEmail = e; localStorage.setItem('tc_email', e); render();
+  },
+  async myKid(f) {
+    ok(await sb.rpc('update_my_kid', { p_kid: f.id, p_phone: f.phone || '', p_birthdate: f.birth || null, p_email: f.email }));
+    await loadAll(); render(); toast('Gespeichert');
+  },
   async submitWait(f, form) {
     if (f.website) { S.waitDone = true; return render(); } // Spam-Falle
     const btn = form.querySelector('button.btn'); btn.disabled = true;
