@@ -458,31 +458,50 @@ function wlFiltered() {
     .sort((a, b) => (a.requested_on || '9999').localeCompare(b.requested_on || '9999') || String(a.created_at).localeCompare(String(b.created_at)));
 }
 const waNumber = (p) => { let d = String(p || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (d.startsWith('0')) return '49' + d.slice(1); return d.length >= 10 ? d : '49' + d; };
-function inviteText(w) {
+function inviteText(w, kind) {
   const inv = S.wlInv?.[w.id] || [];
   const fmtD = (x) => new Date(x).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+  const fmtS = (x) => new Date(x).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + '.';
   const wds = new Set(inv.map((x) => new Date(x).getDay()));
   const days = wds.size ? [...wds].map((d) => (d === 2 ? 'dienstags' : 'freitags')) : [w.tue && 'dienstags', w.fri && 'freitags'].filter(Boolean);
   const day = (days.length ? [...new Set(days)] : ['freitags']).join(' und ');
-  const first = inv.length ? `Ein erstes Schnuppertraining ist am ${inv.map(fmtD).join(' oder am ')} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
-  return `Liebe Eltern,
-
-wir freuen uns, euch in unserem Training ${day} von 17:30-20 Uhr einen Platz anbieten zu können.
-
-Das Training findet in der BiZ-Halle des Gymnasiums/Carl-Engler-Realschule statt. Wir treffen uns vor der Halle auf dem Parkplatz und betreten die Halle nur gemeinsam.
-
-Zum Training werden Socken/Schläppchen, Sportkleidung (elastische Hose ohne Bänder oder Reißverschlüsse), (bei langen Haaren) ein Haargummi und eine Trinkflasche benötigt.
-
-${first}
-
-Bitte gebt uns eine kurze Rückmeldung, ob Interesse besteht.
-
-Mit sportlichen Grüßen,
+  const sign = `Mit sportlichen Grüßen,
 
 Jarina Adams
 Trampolin Trainer
 BA. Sportwissenschaften
 TV Hemsbach`;
+  const hall = `Das Training findet in der BiZ-Halle des Gymnasiums/Carl-Engler-Realschule statt. Wir treffen uns vor der Halle auf dem Parkplatz und betreten die Halle nur gemeinsam.
+
+Zum Training werden Socken/Schläppchen, Sportkleidung (elastische Hose ohne Bänder oder Reißverschlüsse), (bei langen Haaren) ein Haargummi und eine Trinkflasche benötigt.`;
+  if (kind === 'trial') {
+    const first = inv.length ? `Ein erstes Schnuppertraining ist am ${inv.map(fmtS).join(' oder am ')} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
+    return `Liebe Eltern,
+
+${first}
+
+${hall}
+
+Dies ist noch keine feste Zusage für einen Platz sondern vorerst nur ein erstes Kennenlernen.
+
+Da wir die Kinder bei den ersten beiden Trainingseinheiten zum schnuppern noch nicht einschätzen können, werden in diesen beiden Tagen nur erste Grundlagen beigebracht und Saltos sind nicht erlaubt.
+
+Bitte gebt uns eine kurze Rückmeldung, ob Interesse besteht.
+
+${sign}`;
+  }
+  const first = inv.length ? `Ein erstes Schnuppertraining ist am ${inv.map(fmtD).join(' oder am ')} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
+  return `Liebe Eltern,
+
+wir freuen uns, euch in unserem Training ${day} von 17:30-20 Uhr einen Platz anbieten zu können.
+
+${hall}
+
+${first}
+
+Bitte gebt uns eine kurze Rückmeldung, ob Interesse besteht.
+
+${sign}`;
 }
 function wlList() {
   const list = wlFiltered();
@@ -494,7 +513,7 @@ function wlList() {
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
       ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
-      ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w))}">Einladung per WhatsApp</a>` : ''}${w.email ? `<a class="btn small ghost" href="mailto:${esc(w.email)}?subject=${encodeURIComponent('Schnuppertraining Trampolin TV Hemsbach')}&body=${encodeURIComponent(inviteText(w))}">Einladung per Mail</a>` : ''}</div>` : ''}
+      ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}">WhatsApp</a>` : ''}${w.email ? `<a class="btn small ghost" href="mailto:${esc(w.email)}?subject=${encodeURIComponent('Schnuppertraining Trampolin TV Hemsbach')}&body=${encodeURIComponent(inviteText(w, 'trial'))}">Mail</a>` : ''}</div><div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<a class="btn small ghost" href="mailto:${esc(w.email)}?subject=${encodeURIComponent('Trainingsplatz Trampolin TV Hemsbach')}&body=${encodeURIComponent(inviteText(w, 'offer'))}">Mail</a>` : ''}</div>` : ''}
       ${can('waitlist_manage') ? `<label>Notiz<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}</p>` : '')}
       ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
         ${can('kids_manage') ? `<button class="btn small" data-a="wlAccept" data-id="${w.id}">Als Teilnehmer anlegen</button>` : ''}</div>` : ''}</div>`;
