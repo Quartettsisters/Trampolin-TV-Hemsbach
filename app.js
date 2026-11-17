@@ -46,7 +46,7 @@ const S = {
   open: null, detail: {}, dayFilter: 'all',
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
   inviteCode: '', invites: [], invite: null, lastInvite: null,
-  activity: {}, openKid: null, kidFilter: 'all',
+  activity: {}, openKid: null, kidFilter: 'all', kidView: 'list',
 };
 
 function toast(msg) {
@@ -367,6 +367,8 @@ function viewUsers() {
     <p class="small muted">Die festen Rollen (Admin, Trainer, Eltern) lassen sich nicht ändern. Neue Rollen starten ohne Rechte.</p></div>`;
 }
 
+const phones = (k) => String(k.phone || '').split(/[;\n]+/).map((x) => x.trim()).filter(Boolean);
+const phoneLinks = (k) => phones(k).map((p) => `<a href="tel:${esc(p.replace(/\(.*?\)/g, '').replace(/[^\d+]/g, ''))}">${esc(p)}</a>`).join('<br>') || '–';
 const avatar = (name) => `<span class="avatar">${esc((name || '?').trim()[0]?.toUpperCase())}</span>`;
 function kidTags(k) {
   return `${k.tue ? '<span class="tag tue">Dienstag</span>' : ''}${k.fri ? '<span class="tag fri">Freitag</span>' : ''}${!k.active ? '<span class="tag off">Inaktiv</span>' : ''}`;
@@ -379,6 +381,13 @@ function viewKids() {
   const list = all.filter((k) => f === 'all' ? k.active : f === 'off' ? !k.active : k.active && k[f]);
   const chips = [['all', `Alle (${act.length})`], ['tue', `Dienstag (${act.filter((k) => k.tue).length})`], ['fri', `Freitag (${act.filter((k) => k.fri).length})`], ['off', `Inaktiv (${all.length - act.length})`]]
     .map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-a="kidFilter" data-v="${k}">${l}</button>`).join('');
+  const canPhone = mg || can('registrations_view');
+  const toggle = canPhone ? `<button class="chip ${S.kidView === 'phones' ? 'on' : ''}" data-a="kidView" data-v="${S.kidView === 'phones' ? 'list' : 'phones'}">📞 Telefonliste</button>` : '';
+  if (S.kidView === 'phones' && canPhone) {
+    const tbl = list.map((k) => `<tr><td><b>${esc(k.name)}</b> ${kidTags(k)}</td><td>${phoneLinks(k)}</td></tr>`).join('');
+    return `<div class="card"><h2>Telefonliste</h2><div class="chips">${chips}${toggle}</div>
+      <table class="tbl"><thead><tr><th>Name</th><th>Telefon</th></tr></thead><tbody>${tbl || '<tr><td colspan="2" class="muted">Keine Einträge.</td></tr>'}</tbody></table></div>`;
+  }
   const rows = list.map((k) => {
     const g = S.guardCount[k.id] || 0;
     const sub = [mg ? (g ? `<span>✓ Eltern verknüpft${g > 1 ? ` (${g})` : ''}</span>` : '<span>✕ Keine Eltern verknüpft</span>') : '',
@@ -388,7 +397,7 @@ function viewKids() {
     return `<div class="mrow"><div class="mmain ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
       <div class="minfo"><div><b>${esc(k.name)}</b> ${kidTags(k)}</div><div class="msub">${sub}</div></div>${mg ? '<span class="chev">›</span>' : ''}</div>
       ${open ? `<div class="mdetail"><div class="btns"><button class="chip ${k.tue ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="tue">Dienstag</button><button class="chip ${k.fri ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="fri">Freitag</button></div>
-        <p class="small">${k.phone ? `<a href="tel:${esc(k.phone)}">📞 ${esc(k.phone)}</a>` : '<span class="muted">Keine Telefonnummer</span>'}</p>
+        <p class="small">${k.phone ? `📞 ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}</p>
         <div class="btns"><button class="btn small ghost" data-a="kidPhone" data-id="${k.id}">Telefon ändern</button>
         <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Inaktiv setzen' : 'Wieder aktivieren'}</button></div></div>` : ''}</div>`;
   }).join('') || '<p class="muted">Keine Einträge.</p>';
@@ -399,9 +408,9 @@ function viewKids() {
     <div class="btns"><a class="btn" target="_blank" rel="noopener" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Hallo! Hier ist die Trampolin-App vom TV Hemsbach. Link öffnen und dein Kind antippen, mehr ist nicht nötig:\n${location.origin}${location.pathname}?c=${S.inviteCode}`)}`)}">Per WhatsApp teilen</a>
     <button class="btn ghost" data-a="copyLink">Link kopieren</button><button class="btn ghost" data-a="rotate">Neuen Code erzeugen</button></div>
     <p class="small muted">Wer den Link hat, sieht die Vornamen der Kinder. Nur in der Gruppe teilen.</p></div>` : '';
-  const form = mg ? `<details class="card"><summary>Neues Kind anlegen</summary><form data-f="newKid"><label>Name (z. B. „Mia K.“)<input name="name" required></label><label>Telefon (Notfall)<input name="phone" type="tel"></label>
+  const form = mg ? `<details class="card"><summary>Neues Kind anlegen</summary><form data-f="newKid"><label>Name (z. B. „Mia K.“)<input name="name" required></label><label>Telefon (mehrere mit ; trennen)<input name="phone"></label>
     <label class="line"><input type="checkbox" name="tue"> Dienstag</label><label class="line"><input type="checkbox" name="fri"> Freitag</label><button class="btn">Kind anlegen</button></form></details>` : '';
-  return `${link}${team}<div class="card"><h2>Kinder</h2><div class="chips">${chips}</div>${rows}</div>${form}`;
+  return `${link}${team}<div class="card"><h2>Kinder</h2><div class="chips">${chips}${toggle}</div>${rows}</div>${form}`;
 }
 
 function viewNews() {
@@ -462,11 +471,12 @@ const A = {
   },
   dayFilter(d) { S.dayFilter = d.v; render(); },
   kidFilter(d) { S.kidFilter = d.v; render(); },
+  kidView(d) { S.kidView = d.v; render(); },
   openKid(d) { S.openKid = S.openKid === d.id ? null : d.id; render(); },
   async kidActive(d) { ok(await sb.from('kids').update({ active: d.v === 'true' }).eq('id', d.id)); await loadAll(); render(); },
   async kidPhone(d) {
     const k = S.allKids.find((x) => x.id === d.id);
-    const v = prompt('Telefonnummer', k?.phone || ''); if (v === null) return;
+    const v = prompt('Telefonnummern (mehrere mit ; trennen, z. B. 0176 123 (Mama); 0151 456 (Papa))', k?.phone || ''); if (v === null) return;
     ok(await sb.from('kids').update({ phone: v.trim() || null }).eq('id', d.id)); await loadAll(); render();
   },
   async copyText(d) { await navigator.clipboard.writeText(d.t); toast('Link kopiert'); },

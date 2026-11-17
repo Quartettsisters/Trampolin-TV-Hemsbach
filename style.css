@@ -57,3 +57,6 @@ nav button span { display: block; font-size: 1.3rem; } nav button.on { color: va
 .chev { color: #aaa; font-size: 1.4rem; } .mdetail { padding: 0 0 12px 58px; }
 .tag { display: inline-block; font-size: .72rem; font-weight: 700; color: #fff; padding: 2px 8px; border-radius: 6px; margin-left: 4px; vertical-align: middle; }
 .tag.tue { background: #1f9d55; } .tag.fri { background: #d71920; } .tag.tr { background: #3a7ab8; } .tag.gs { background: #e9a23b; } .tag.off { background: #9b9797; }
+
+.tbl { width: 100%; border-collapse: collapse; margin-top: 8px; } .tbl th { text-align: left; color: #0b5a47; font-size: .85rem; padding: 6px 4px; border-bottom: 2px solid #ddd; }
+.tbl td { padding: 9px 4px; border-bottom: 1px solid #eee; vertical-align: top; } .tbl a { color: #0b5a47; text-decoration: none; }
