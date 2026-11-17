@@ -28,10 +28,5 @@
     }
   ],
   "id": "./",
-  "related_applications": [
-    {
-      "platform": "webapp",
-      "url": "https://quartettsisters.github.io/Trampolin-TV-Hemsbach/manifest.webmanifest"
-    }
-  ]
+  "launch_handler": { "client_mode": ["navigate-existing", "auto"] }
 }
