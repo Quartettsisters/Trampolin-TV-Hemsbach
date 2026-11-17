@@ -230,6 +230,17 @@ function askModal(title, text, buttons) {
   });
 }
 
+async function inviteFlow(w) {
+  const nm = [w.first_name, w.last_name].filter(Boolean).join(' ');
+  const ids = await pickSessions(nm);
+  if (!ids) return false;
+  if (can('registrations_manage')) ok(await sb.from('session_guests').insert(ids.map((id) => ({ session_id: id, name: nm, waitlist_id: w.id }))));
+  const first = S.sessions.filter((x) => ids.includes(x.id)).map((x) => x.starts_at).sort()[0];
+  ok(await sb.from('waitlist').update({ status: 'invited', trial: true, trial_on: first ? dkey(first) : null }).eq('id', w.id));
+  toast('Eingeladen, als Schnupperkind eingetragen');
+  return true;
+}
+
 function pickSessions(name) {
   const list = S.sessions.filter((x) => !x.cancelled && new Date(x.starts_at) > new Date()).slice(0, 16);
   return new Promise((resolve) => {
@@ -767,19 +778,18 @@ const A = {
   async wlStatus(d, el) {
     const w = S.waitlist.find((x) => x.id === d.id);
     if (el.value === 'invited' && w?.status !== 'invited') {
-      const ids = await pickSessions([w.first_name, w.last_name].filter(Boolean).join(' '));
-      if (!ids) { render(); return; }
-      if (can('registrations_manage')) {
-        ok(await sb.from('session_guests').insert(ids.map((id) => ({ session_id: id, name: [w.first_name, w.last_name].filter(Boolean).join(' '), waitlist_id: w.id }))));
-      }
-      const first = S.sessions.filter((x) => ids.includes(x.id)).map((x) => x.starts_at).sort()[0];
-      ok(await sb.from('waitlist').update({ status: 'invited', trial: true, trial_on: first ? dkey(first) : null }).eq('id', d.id));
-      toast('Eingeladen, als Schnupperkind eingetragen');
+      if (!(await inviteFlow(w))) { render(); return; }
     } else ok(await sb.from('waitlist').update({ status: el.value }).eq('id', d.id));
     await loadAll(); render();
   },
+
   async mailCompose(d) {
-    const w = S.waitlist.find((x) => x.id === d.id); if (!w?.email) return;
+    let w = S.waitlist.find((x) => x.id === d.id); if (!w?.email) return;
+    if (d.k === 'trial' && !(S.wlInv?.[w.id]?.length)) {
+      // Schnupper-Mail nur mit festgelegten Terminen: erst Termine wählen, dabei wird der Status auf "Eingeladen" gesetzt
+      if (!(await inviteFlow(w))) return;
+      await loadAll(); w = S.waitlist.find((x) => x.id === d.id);
+    }
     const subject = d.k === 'trial' ? 'Schnuppertraining Trampolin TV Hemsbach' : 'Trainingsplatz Trampolin TV Hemsbach';
     const el = document.createElement('div'); el.className = 'modal';
     el.innerHTML = `<div class="box left"><h2>Mail an ${esc(w.email)}</h2><label>Betreff<input id="mc-s" value="${esc(subject)}"></label>
