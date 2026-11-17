@@ -128,6 +128,7 @@ async function init() {
   if (p.get('w')) { S.view = 'waitform'; render(); if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {}); return; }
   if (p.get('c')) localStorage.setItem('tc_code', p.get('c'));
   S.code = p.get('c') || localStorage.getItem('tc_code');
+  if (p.get('go')) { try { S.pendingGo = JSON.parse(p.get('go')); } catch { /* egal */ } history.replaceState(null, '', location.pathname + (p.get('c') ? `?c=${p.get('c')}` : '')); }
   const { data: { session } } = await sb.auth.getSession();
   if (session) { S.user = session.user; await afterLogin(); }
   else if (S.code) { await loadOverview(); S.view = 'pick'; }
@@ -155,6 +156,7 @@ async function afterLogin() {
   await loadAll();
   S.view = 'main';
   MAIL.start();
+  if (S.pendingGo) { const g = S.pendingGo; S.pendingGo = null; setTimeout(() => run(() => openGo(g)), 0); }
   if (!can('registrations_view') && !S.myKids.length) S.tab = 'profil';
 }
 
@@ -270,6 +272,23 @@ function pickSessions(name) {
 }
 
 /* ---------- Views ---------- */
+/* Klick auf eine Push-Nachricht: passende Mail oder passenden Termin öffnen */
+async function openGo(go) {
+  if (!go) return;
+  if (S.view !== 'main') { S.pendingGo = go; return; }
+  if (go.go === 'mail' && can('mailbox')) {
+    S.tab = 'postfach'; S.mail.open = null; S.mail.thread = []; render();
+    if (go.k) await A.mailOpen({ k: go.k });
+  } else if (go.go === 'session') {
+    S.tab = 'termine'; S.termView = 'list'; S.open = go.id;
+    if (!S.sessions.some((x) => x.id === go.id)) await refreshSessions();
+    if (can('registrations_view')) await loadDetail(go.id);
+    render();
+    setTimeout(() => document.querySelector(`[data-s="${go.id}"]`)?.scrollIntoView({ block: 'center' }), 50);
+  }
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.go) run(() => openGo(e.data.go)); });
+
 /* Zurück-Taste des Handys: geht in der App einen Schritt zurück statt sie zu schließen */
 let navKey = null, navApplying = false;
 const navSnap = () => ({ tab: S.tab, open: S.open, openKid: S.openKid, wlOpen: S.wlOpen, mail: S.mail.open || null });

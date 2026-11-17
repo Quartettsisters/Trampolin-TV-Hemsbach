@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   for (const s of todays) {
     const n = (cnt ?? []).find((c: any) => c.session_id === s.id)?.going ?? 0;
     const time = new Date(s.starts_at).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
-    const payload = JSON.stringify({ title: 'Training heute', body: `Heute ${time} Uhr: ${n} ${n === 1 ? 'Kind' : 'Kinder'} gemeldet.` });
+    const payload = JSON.stringify({ title: 'Training heute', body: `Heute ${time} Uhr: ${n} ${n === 1 ? 'Kind' : 'Kinder'} gemeldet.`, data: { go: 'session', id: s.id } });
     await Promise.all((subs ?? []).map(async (sub: any) => {
       try {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);

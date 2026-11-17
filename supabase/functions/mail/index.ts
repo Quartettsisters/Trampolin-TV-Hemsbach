@@ -162,6 +162,7 @@ async function pushNew(admin: any, fresh: any[], exceptUser: string | null) {
   const payload = JSON.stringify({
     title: one ? 'Neue Mail' : `${fresh.length} neue Mails`,
     body: one ? `${fresh[0].from_name || fresh[0].from_addr}: ${fresh[0].subject || '(ohne Betreff)'}` : fresh.slice(0, 3).map((m) => m.from_name || m.from_addr).join(', '),
+    data: { go: 'mail', k: one ? fresh[0].thread_key : null },
   });
   await Promise.all((subs ?? []).map(async (s: any) => {
     try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload); }
