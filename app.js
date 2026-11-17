@@ -424,16 +424,18 @@ function wlFiltered() {
 function wlList() {
   const list = wlFiltered();
   if (!list.length) return '<p class="muted center">Keine Einträge.</p>';
-  return list.map((w, i) => `<div class="card wl">
-    <div class="shead"><div><b>${i + 1}. ${esc(w.first_name)} ${esc(w.last_name)}</b>
-      ${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}<br>
-      <span class="small muted">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}</span></div>
-      <div>${w.tue ? '<span class="badge gray">Di</span>' : ''}${w.fri ? '<span class="badge gray">Fr</span>' : ''}${w.trial ? '<span class="badge green">Schnuppern</span>' : ''}</div></div>
-    <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
-    ${w.note ? `<p class="note">${esc(w.note)}</p>` : ''}
-    ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
-      <button class="btn small ghost" data-a="wlNote" data-id="${w.id}">Notiz</button>
-      ${can('kids_manage') ? `<button class="btn small" data-a="wlAccept" data-id="${w.id}">→ Teilnehmer</button>` : ''}</div>` : ''}</div>`).join('');
+  const tag = (w) => `${w.tue ? '<span class="tag tue">Dienstag</span>' : ''}${w.fri ? '<span class="tag fri">Freitag</span>' : ''}`;
+  return `<div class="list">${list.map((w) => {
+    const open = S.wlOpen === w.id;
+    const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
+    const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
+      <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
+      ${w.note ? `<p class="note">${esc(w.note)}</p>` : ''}
+      ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <button class="btn small ghost" data-a="wlNote" data-id="${w.id}">Notiz</button>
+        ${can('kids_manage') ? `<button class="btn small" data-a="wlAccept" data-id="${w.id}">Als Teilnehmer anlegen</button>` : ''}</div>` : ''}</div>`;
+    return `<div class="scard">${head}${det}</div>`;
+  }).join('')}</div>`;
 }
 function viewWaitlist() {
   const counts = Object.fromEntries(Object.keys(STATUS).map((k) => [k, S.waitlist.filter((w) => w.status === k).length]));
@@ -673,6 +675,7 @@ const A = {
     ok(await sb.from('roles').delete().eq('id', d.id)); await loadAll(); render();
   },
   wlFilter(d) { S.wlFilter = d.v; render(); },
+  wlOpen(d) { S.wlOpen = S.wlOpen === d.id ? null : d.id; render(); },
   async wlStatus(d, el) { ok(await sb.from('waitlist').update({ status: el.value }).eq('id', d.id)); await loadAll(); render(); },
   async wlNote(d) {
     const w = S.waitlist.find((x) => x.id === d.id);
