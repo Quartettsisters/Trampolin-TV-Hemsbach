@@ -295,3 +295,55 @@ grant execute on function public.set_response, public.claim_kid, public.rotate_i
 -- Alle weiteren Rollen vergibst du dann in der App unter „Nutzer“.
 --   update public.profiles set role_id = (select id from public.roles where name = 'Admin')
 --   where email = 'deine@mail.de';
+
+-- ---------- Trainer-/Geschäftsstellen-Einladung per persönlichem Einmal-Link (ohne Mail) ----------
+-- Der Admin erzeugt in der App unter "Nutzer" einen Link (7 Tage gültig, einmal einlösbar). Rolle "Admin" ist per Link nicht vergebbar.
+alter table public.profiles add column display_name text;
+
+create table public.staff_invites (
+  id uuid primary key default gen_random_uuid(),
+  token text not null unique,
+  role_id uuid not null references public.roles on delete cascade,
+  label text not null,
+  created_by uuid references auth.users on delete set null,
+  expires_at timestamptz not null default now() + interval '7 days',
+  used_at timestamptz,
+  used_by uuid references auth.users on delete set null
+);
+create index staff_invites_role_idx on public.staff_invites (role_id);
+create index staff_invites_created_by_idx on public.staff_invites (created_by);
+create index staff_invites_used_by_idx on public.staff_invites (used_by);
+alter table public.staff_invites enable row level security;
+create policy staff_invites_read on public.staff_invites for select to authenticated using (has_perm('users_manage'));
+create policy staff_invites_delete on public.staff_invites for delete to authenticated using (has_perm('users_manage'));
+
+create function public.create_staff_invite(p_role uuid, p_label text) returns text
+language plpgsql security definer set search_path = public as $$
+declare t text; rname text;
+begin
+  if not has_perm('users_manage') then raise exception 'Nicht erlaubt'; end if;
+  select name into rname from roles where id = p_role;
+  if rname is null or rname in ('Admin','Eltern') then raise exception 'Diese Rolle kann nicht per Einladung vergeben werden'; end if;
+  if coalesce(trim(p_label), '') = '' then raise exception 'Bitte einen Namen angeben'; end if;
+  t := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+  insert into staff_invites (token, role_id, label, created_by) values (t, p_role, trim(p_label), auth.uid());
+  return t;
+end $$;
+
+create function public.redeem_staff_invite(p_token text) returns text
+language plpgsql security definer set search_path = public as $$
+declare inv staff_invites%rowtype; rname text; cur text;
+begin
+  if auth.uid() is null then raise exception 'Nicht angemeldet'; end if;
+  select r.name into cur from profiles p join roles r on r.id = p.role_id where p.id = auth.uid();
+  if cur = 'Admin' then raise exception 'Admins können keine Einladung annehmen'; end if;
+  select * into inv from staff_invites where token = p_token and used_at is null and expires_at > now() for update;
+  if not found then raise exception 'Einladung ungültig, abgelaufen oder schon benutzt'; end if;
+  update profiles set role_id = inv.role_id, display_name = inv.label where id = auth.uid();
+  update staff_invites set used_at = now(), used_by = auth.uid() where id = inv.id;
+  select name into rname from roles where id = inv.role_id;
+  return rname;
+end $$;
+
+revoke all on function public.create_staff_invite, public.redeem_staff_invite from public, anon;
+grant execute on function public.create_staff_invite, public.redeem_staff_invite to authenticated;

@@ -45,7 +45,7 @@ const S = {
   sessions: [], counts: {}, regs: [], messages: [],
   open: null, detail: {}, dayFilter: 'all',
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
-  inviteCode: '',
+  inviteCode: '', invites: [], invite: null, lastInvite: null,
 };
 
 function toast(msg) {
@@ -92,6 +92,7 @@ async function init() {
   if (session) { S.user = session.user; await afterLogin(); }
   else if (S.code) { await loadOverview(); S.view = 'pick'; }
   else S.view = 'login';
+  if (p.get('i')) { S.invite = p.get('i'); S.view = 'invite'; }
   render(); renderInstall();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
@@ -133,15 +134,16 @@ async function loadAll() {
   S.guardCount = {};
   g.forEach((x) => { S.guardCount[x.kid_id] = (S.guardCount[x.kid_id] || 0) + 1; });
   const none = Promise.resolve({ data: [] });
-  const [k, w, c, u, r] = await Promise.all([
+  const [k, w, c, u, r, inv] = await Promise.all([
     can('kids_manage') || can('registrations_view') ? sb.from('kids').select('*').order('name') : can('kids_view') ? sb.rpc('kids_list') : none,
     can('waitlist_view') ? sb.from('waitlist').select('*').order('created_at') : none,
     can('kids_manage') ? sb.from('settings').select('value').eq('key', 'invite_code').maybeSingle() : Promise.resolve({ data: null }),
-    can('users_manage') ? sb.from('profiles').select('id, email, role_id').order('email') : none,
+    can('users_manage') ? sb.from('profiles').select('id, email, display_name, role_id').order('email') : none,
     sb.from('roles').select('*').order('name'),
+    can('users_manage') ? sb.from('staff_invites').select('*').is('used_at', null).gt('expires_at', new Date().toISOString()).order('expires_at') : none,
   ]);
   S.allKids = ok(k); S.waitlist = ok(w); S.inviteCode = c.data?.value || '';
-  S.users = ok(u); S.roles = ok(r);
+  S.users = ok(u); S.roles = ok(r); S.invites = ok(inv);
 }
 
 async function refreshSessions() {
@@ -157,9 +159,17 @@ async function loadDetail(id) {
 /* ---------- Views ---------- */
 function render() {
   app.innerHTML = S.view === 'boot' ? '<p class="center muted">Lädt…</p>'
+    : S.view === 'invite' ? viewInvite()
     : S.view === 'pick' ? viewPick()
     : S.view === 'login' ? viewLogin()
     : viewMain();
+}
+
+function viewInvite() {
+  return `<div class="card"><h1>🤸 Trampolin Training</h1><h2>Einladung ins Team</h2>
+    <p>Du wurdest eingeladen, bei den Trainern mitzumachen.</p>
+    <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst und tippe danach hier auf den Knopf.</p>
+    <button class="btn big" data-a="acceptInvite">Einladung annehmen</button></div>`;
 }
 
 function viewPick() {
@@ -168,12 +178,12 @@ function viewPick() {
     <h2>Wer ist dein Kind?</h2>
     ${S.overviewError ? `<p class="err">${esc(S.overviewError)}</p>` : `<div class="kidlist">${kids}</div>`}
     <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst. Danach tippst du hier dein Kind an. Weitere Kinder kannst du später hinzufügen.</p>
-    <button class="link" data-a="toLogin">Anmeldung für Trainer / Geschäftsstelle</button></div>`;
+    <button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button></div>`;
 }
 
 function viewLogin() {
   const L = S.login;
-  const who = '<p>Anmeldung für Trainer und Geschäftsstelle.</p>';
+  const who = '<p>Anmeldung mit E-Mail-Code (für den Admin).</p>';
   const form = L.step === 'email'
     ? `<form data-f="email"><label>E-Mail-Adresse<input name="email" type="email" required autocomplete="email" value="${esc(L.email)}"></label>
        <button class="btn big">Code per Mail senden</button></form>`
@@ -310,13 +320,25 @@ function viewWaitlist() {
 
 function viewUsers() {
   const roleOpts = (cur) => S.roles.map((r) => `<option value="${r.id}" ${r.id === cur ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
-  const users = S.users.filter((u) => u.email).map((u) => `<div class="kidrow"><div><b class="break">${esc(u.email)}</b>${u.id === S.user.id ? ' <span class="badge gray">du</span>' : ''}</div>
+  const named = S.users.filter((u) => u.email || u.display_name);
+  const users = named.map((u) => `<div class="kidrow"><div><b class="break">${esc(u.display_name || u.email)}</b>${u.display_name && u.email ? `<br><span class="small muted">${esc(u.email)}</span>` : ''}${u.id === S.user.id ? ' <span class="badge gray">du</span>' : ''}</div>
     <select data-a="setRole" data-u="${u.id}" ${u.id === S.user.id ? 'disabled' : ''}>${roleOpts(u.role_id)}</select></div>`).join('') || '<p class="muted">Noch niemand.</p>';
+  const anon = S.users.length - named.length;
+  const inviteRoles = S.roles.filter((r) => !['Admin', 'Eltern'].includes(r.name));
+  const last = S.lastInvite ? `<div class="note"><b>Einladung für ${esc(S.lastInvite.label)}</b><p class="small break">${esc(S.lastInvite.link)}</p>
+    <div class="btns"><a class="btn" target="_blank" rel="noopener" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Hallo ${S.lastInvite.label}! Hier ist dein Zugang zur Trampolin-App vom TV Hemsbach. Link öffnen und auf „Einladung annehmen“ tippen (7 Tage gültig, nur für dich):\n${S.lastInvite.link}`)}`)}">Per WhatsApp senden</a>
+    <button class="btn ghost" data-a="copyText" data-t="${esc(S.lastInvite.link)}">Link kopieren</button></div></div>` : '';
+  const open = S.invites.map((i) => `<div class="line">${esc(i.label)} · ${esc(S.roles.find((r) => r.id === i.role_id)?.name || '')} <span class="small muted">bis ${fmtDate(i.expires_at)}</span><button class="x" data-a="delInvite" data-id="${i.id}" title="Zurückziehen">✕</button></div>`).join('');
   const roles = S.roles.map((r) => `<details class="card"><summary><b>${esc(r.name)}</b>${r.is_system ? ' <span class="badge gray">fest</span>' : ''}</summary>
     ${Object.entries(PERMS).map(([k, l]) => `<label class="line"><input type="checkbox" data-a="togglePerm" data-id="${r.id}" data-p="${k}" ${r.perms?.[k] ? 'checked' : ''} ${r.is_system ? 'disabled' : ''}> ${esc(l)}</label>`).join('')}
     ${r.is_system ? '' : `<button class="link" data-a="delRole" data-id="${r.id}">Rolle löschen</button>`}</details>`).join('');
-  const anon = S.users.filter((u) => !u.email).length;
-  return `<h2>Nutzer & Rollen</h2><div class="card">${users}<p class="small muted">Dazu ${anon} Eltern-Geräte (über den Einladungslink, ohne Mail).</p></div>
+  return `<h2>Team einladen</h2><div class="card"><form data-f="newInvite">
+    <label>Name<input name="label" placeholder="z. B. Anna (Trainerin)" required></label>
+    <label>Rolle<select name="role">${inviteRoles.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select></label>
+    <button class="btn">Einladungslink erzeugen</button></form>${last}
+    ${open ? `<h3>Offene Einladungen</h3>${open}` : ''}
+    <p class="small muted">Der Link gilt 7 Tage und nur für eine Person. Er gibt die gewählte Rolle, deshalb nicht weiterleiten.</p></div>
+    <h2>Team & Rollen</h2><div class="card">${users}<p class="small muted">Dazu ${anon} Eltern-Geräte (über den Einladungslink, ohne Mail). Handy verloren? Rolle auf „Eltern“ stellen und neu einladen.</p></div>
     <h2>Rollen und ihre Rechte</h2>${roles}
     <div class="card"><form data-f="newRole"><label>Neue Rolle<input name="name" placeholder="z. B. Übungsleiter" required></label><button class="btn">Rolle anlegen</button></form>
     <p class="small muted">Die festen Rollen (Admin, Trainer, Eltern) lassen sich nicht ändern. Neue Rollen starten ohne Rechte.</p></div>`;
@@ -356,11 +378,22 @@ function viewProfile() {
     <button class="btn" data-a="addKid">Kind hinzufügen</button></div>
     <div class="card"><h2>Benachrichtigungen</h2><button class="btn" data-a="push">Auf diesem Gerät aktivieren</button>
     <p class="small muted">iPhone: App zuerst über „Teilen → Zum Home-Bildschirm“ installieren.</p></div>
-    <div class="card"><p class="small muted">${S.user.email ? `Angemeldet als ${esc(S.user.email)} · Rolle: ${esc(S.roleName)}` : 'Du bist auf diesem Handy angemeldet. Bei einem neuen Handy: Einladungslink aus der WhatsApp-Gruppe erneut öffnen und dein Kind antippen.'}</p><button class="btn ghost" data-a="logout">Abmelden</button></div>`;
+    <div class="card"><p class="small muted">${S.user.email ? `Angemeldet als ${esc(S.user.email)}` : 'Du bist auf diesem Handy angemeldet.'} · Rolle: ${esc(S.roleName)}<br>${S.user.email ? '' : S.roleName === 'Eltern' ? 'Bei einem neuen Handy: Einladungslink aus der WhatsApp-Gruppe erneut öffnen und dein Kind antippen.' : 'Bei einem neuen Handy: neue Einladung vom Admin anfordern.'}</p><button class="btn ghost" data-a="logout">Abmelden</button></div>`;
 }
 
 /* ---------- Aktionen ---------- */
 const A = {
+  async acceptInvite() {
+    if (!S.user) {
+      const { data, error } = await sb.auth.signInAnonymously();
+      if (error) throw new Error('Anmeldung nicht möglich: ' + error.message);
+      S.user = data.user;
+    }
+    const role = ok(await sb.rpc('redeem_staff_invite', { p_token: S.invite }));
+    history.replaceState(null, '', location.pathname + (S.code ? `?c=${S.code}` : ''));
+    S.invite = null; await afterLogin(); S.tab = 'termine'; render(); toast(`Willkommen im Team (${role}) ✔`);
+  },
+  async delInvite(d) { ok(await sb.from('staff_invites').delete().eq('id', d.id)); await loadAll(); render(); },
   async pickKid(d) {
     if (!S.user) {
       const { data, error } = await sb.auth.signInAnonymously();
@@ -394,6 +427,7 @@ const A = {
     const v = prompt('Telefonnummer', k?.phone || ''); if (v === null) return;
     ok(await sb.from('kids').update({ phone: v.trim() || null }).eq('id', d.id)); await loadAll(); render();
   },
+  async copyText(d) { await navigator.clipboard.writeText(d.t); toast('Link kopiert'); },
   async copyLink() { await navigator.clipboard.writeText(`${location.origin}${location.pathname}?c=${S.inviteCode}`); toast('Link kopiert'); },
   async rotate() {
     if (!confirm('Alter Link wird ungültig. Fortfahren?')) return;
@@ -409,7 +443,7 @@ const A = {
     S.view = 'pick'; render();
   },
   async logout() {
-    if (!S.user.email && !confirm('Wirklich abmelden? Danach musst du den Einladungslink erneut öffnen.')) return;
+    if (!S.user.email && !confirm('Wirklich abmelden? Danach brauchst du den Einladungslink erneut' + (S.roleName === 'Eltern' ? '.' : ' (neue Einladung vom Admin).'))) return;
     await sb.auth.signOut(); location.reload();
   },
   async push() {
@@ -478,6 +512,11 @@ const F = {
     rows.forEach((r, i) => { const d = new Date(start); d.setDate(d.getDate() + 7 * i); r.starts_at = d.toISOString(); });
     ok(await sb.from('sessions').insert(rows));
     S.tab = 'termine'; await refreshSessions(); toast(`${n} Termin(e) angelegt`);
+  },
+  async newInvite(f) {
+    const token = ok(await sb.rpc('create_staff_invite', { p_role: f.role, p_label: f.label }));
+    S.lastInvite = { label: f.label.trim(), link: `${location.origin}${location.pathname}?i=${token}` };
+    await loadAll(); render();
   },
   async newRole(f) { ok(await sb.from('roles').insert({ name: f.name.trim(), perms: {} })); await loadAll(); render(); toast('Rolle angelegt – Rechte darunter setzen'); },
   async newKid(f) { ok(await sb.from('kids').insert({ name: f.name.trim(), phone: f.phone || null, tue: f.tue === 'on', fri: f.fri === 'on' })); await loadAll(); render(); },

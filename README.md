@@ -26,6 +26,9 @@ Keine Excel-/CSV-Dateien und keine echten Namen ins Repository legen (`.gitignor
 8. Tab **Kinder**: Kinder anlegen, **Einladungslink** kopieren und in der Elterngruppe teilen.
 9. Tab **Warteliste** → „Aus Excel importieren“.
 
+## Trainer & Geschäftsstelle einladen
+Admin: Tab **Nutzer → Team einladen**: Name + Rolle wählen, Link per WhatsApp senden. Der Link gilt 7 Tage, ist nur einmal einlösbar und gibt die gewählte Rolle (nie Admin). Mail ist nicht nötig; nur der Admin meldet sich per Mail-Code an.
+
 ## Rollen
 Rechte: Trainings verwalten · sehen wer kommt · Kinder ein-/austragen · Anwesenheit · Kinder verwalten · Warteliste sehen/bearbeiten ·
 Nachrichten senden · Nutzer & Rollen. Mitgeliefert: **Admin**, **Trainer**, **Geschäftsstelle** (sieht nur, welche Kinder angemeldet sind, ohne Telefonnummern), **Eltern**.
