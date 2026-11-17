@@ -448,3 +448,8 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 -- ---------- Eltern-Erinnerung 15:45 (Edge Function parent-reminder) ----------
 -- pg_cron 'parent-reminder' ('45 13,14 * * *' UTC; die Funktion prüft 15:45 Europe/Berlin, daher Sommer-/Winterzeit ok).
 -- Training: Eltern von Kindern der Gruppe ohne Absage; Termin mit Anmeldung: nur Eltern von Kindern mit Zusage.
+
+-- ---------- Kinderfotos (Migration kid_photos) ----------
+-- kid_photos: 192x192-JPEG als Data-URL (max. 80 KB), Einwilligung beim Hochladen (consent_at).
+-- Lesen: Trainer (kids_manage/registrations_view) und Eltern des Kindes. Schreiben/Löschen nur über set_kid_photo / clear_kid_photo
+-- (Eltern des Kindes oder kids_manage).

@@ -72,7 +72,7 @@ const can = (p) => !!S.perms[p];
 
 const S = {
   view: 'boot', tab: 'termine', user: null, perms: {}, roleName: '', users: [], roles: [],
-  code: null, overview: [], overviewError: '', parentEmail: localStorage.getItem('tc_email') || '', guardEmails: {},
+  code: null, overview: [], overviewError: '', parentEmail: localStorage.getItem('tc_email') || '', guardEmails: {}, photos: {}, photoVer: {},
   login: { step: 'email', email: '', kid: null },
   myKids: [], allKids: [], guardCount: {},
   sessions: [], counts: {}, regs: [], messages: [],
@@ -198,6 +198,30 @@ async function loadAll() {
   S.allKids = ok(k); S.waitlist = ok(w); S.inviteCode = c.data?.value || '';
   S.users = ok(u); S.roles = ok(r); S.invites = ok(inv);
   await loadActivity();
+  await loadPhotos();
+}
+
+async function loadPhotos() {
+  // Fotos werden nur nachgeladen, wenn sie neu oder geändert sind
+  try {
+    const meta = ok(await sb.from('kid_photos').select('kid_id, updated_at'));
+    const ids = new Set(meta.map((m) => m.kid_id));
+    for (const id of Object.keys(S.photos)) if (!ids.has(id)) { delete S.photos[id]; delete S.photoVer[id]; }
+    const need = meta.filter((m) => S.photoVer[m.kid_id] !== m.updated_at).map((m) => m.kid_id);
+    for (let i = 0; i < need.length; i += 20) {
+      const rows = ok(await sb.from('kid_photos').select('kid_id, data, updated_at').in('kid_id', need.slice(i, i + 20)));
+      rows.forEach((r) => { S.photos[r.kid_id] = r.data; S.photoVer[r.kid_id] = r.updated_at; });
+    }
+  } catch (e) { console.warn('Fotos', e); }
+}
+
+async function resizePhoto(file) {
+  if (file.size > 20e6) throw new Error('Das Foto ist zu groß.');
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const size = 192, c = document.createElement('canvas'); c.width = c.height = size;
+  const m = Math.min(bmp.width, bmp.height);
+  c.getContext('2d').drawImage(bmp, (bmp.width - m) / 2, (bmp.height - m) / 2, m, m, 0, 0, size, size);
+  return c.toDataURL('image/jpeg', 0.8);
 }
 
 // Aktivität: Anteil der letzten (bis zu 8) vergangenen Trainings der Gruppe des Kindes, auf die geantwortet wurde
@@ -515,7 +539,7 @@ function detailTrainer(s) {
   const inn = kids.filter((k) => (s.signup ? reg(k)?.status === 'going' : reg(k)?.status !== 'declined'));
   const open = s.signup ? kids.filter((k) => !reg(k)) : [];
   const btn = (k, v, on, ic) => `<button class="rb ${on ? (v === 'yes' ? 'yes' : 'no') : ''}" ${mg ? `data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="${v}"` : 'disabled'}>${ic}</button>`;
-  const row = (k, going, pending) => `<div class="prow">${avatar()}<span class="pn">${esc(k.name)}</span>
+  const row = (k, going, pending) => `<div class="prow">${avatar(k.id)}<span class="pn">${esc(k.name)}</span>
     ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
     ${btn(k, 'yes', going, ic('check'))}${btn(k, 'no', !going && !pending, ic('x'))}</div>`;
   const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="setGrp" data-s="${s.id}" data-v="${s.grp === 'all' ? (new Date(s.starts_at).getDay() === 5 ? 'fri' : 'tue') : 'all'}">${s.grp === 'all' ? 'Nur ' + (new Date(s.starts_at).getDay() === 5 ? 'Freitag' : 'Dienstag') : 'Für beide Gruppen öffnen'}</button><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
@@ -718,7 +742,7 @@ function viewUsers() {
 
 const phones = (k) => String(k.phone || '').split(/[;\n]+/).map((x) => x.trim()).filter(Boolean);
 const phoneLinks = (k) => phones(k).map((p) => `<a href="tel:${esc(p.replace(/\(.*?\)/g, '').replace(/[^\d+]/g, ''))}">${esc(p)}</a>`).join('<br>') || '–';
-const avatar = () => '<span class="avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4.3" fill="#fff"/><path d="M3.3 24c0-5.6 4-8.6 8.7-8.6s8.7 3 8.7 8.6z" fill="#fff"/></svg></span>';
+const avatar = (kidId) => S.photos?.[kidId] ? `<span class="avatar"><img alt="" src="${S.photos[kidId]}"></span>` : '<span class="avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4.3" fill="#fff"/><path d="M3.3 24c0-5.6 4-8.6 8.7-8.6s8.7 3 8.7 8.6z" fill="#fff"/></svg></span>';
 function kidTags(k) {
   return `${k.tue ? '<span class="tag tue">Dienstag</span>' : ''}${k.fri ? '<span class="tag fri">Freitag</span>' : ''}${!k.active ? '<span class="tag off">Inaktiv</span>' : ''}`;
 }
@@ -744,7 +768,7 @@ function viewKids() {
       S.activity[k.id] ? `<span>Zuletzt ${S.activity[k.id].n} von ${S.activity[k.id].m} Trainings da</span>` : '',
       !k.tue && !k.fri ? '<span class="warn">Trainingstag fehlt</span>' : ''].filter(Boolean).join(' ');
     const open = mg && S.openKid === k.id;
-    return `<div class="mrow"><div class="mmain kg ${!k.active ? 'kg-off' : k.tue && k.fri ? 'kg-both' : k.tue ? 'kg-tue' : k.fri ? 'kg-fri' : 'kg-none'} ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
+    return `<div class="mrow"><div class="mmain kg ${!k.active ? 'kg-off' : k.tue && k.fri ? 'kg-both' : k.tue ? 'kg-tue' : k.fri ? 'kg-fri' : 'kg-none'} ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.id)}
       <div class="minfo"><div><b>${esc(k.name)}</b> ${kidTags(k)}</div><div class="msub">${sub}</div></div>${mg ? '<span class="chev">›</span>' : ''}</div>
       ${open ? `<div class="mdetail"><div class="btns"><button class="chip ${k.tue ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="tue">Dienstag</button><button class="chip ${k.fri ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="fri">Freitag</button></div>
         <p class="small">${k.phone ? `${ic('phone')} ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}<br>${k.birthdate ? `${ic('cake')} ${fmtDate(k.birthdate)} (${ageOf(k.birthdate)} Jahre)` : '<span class="muted">Kein Geburtstag eingetragen</span>'}</p>
@@ -753,7 +777,7 @@ function viewKids() {
         <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Inaktiv setzen' : 'Wieder aktivieren'}</button></div>
         <p class="small">${S.guardEmails[k.id]?.length ? `${ic('mail')} ${S.guardEmails[k.id].map((m) => `<a href="mailto:${esc(m)}">${esc(m)}</a>`).join(', ')}` : '<span class="muted">Keine Eltern-E-Mail</span>'}</p>
         <div class="btns"><button class="btn small ghost" data-a="kidSecond" data-id="${k.id}" data-v="${!k.allow_second}">${k.allow_second ? 'Zweites Elternteil: zurücknehmen' : 'Zweites Elternteil erlauben'}</button>
-        ${S.guardCount[k.id] ? `<button class="btn small ghost" data-a="kidRelease" data-id="${k.id}">Verknüpfung freigeben</button>` : ''}</div>
+        ${S.guardCount[k.id] ? `<button class="btn small ghost" data-a="kidRelease" data-id="${k.id}">Verknüpfung freigeben</button>` : ''}${S.photos[k.id] ? `<button class="btn small ghost" data-a="kidPhotoDel" data-k="${k.id}">Foto entfernen</button>` : ''}</div>
         ${k.allow_second ? '<p class="small warn">Ein weiteres Elternteil kann dieses Kind jetzt einmal über den Einladungslink wählen.</p>' : ''}</div>` : ''}</div>`;
   }).join('') || '<p class="muted">Keine Einträge.</p>';
   const staff = can('users_manage') ? S.users.filter((u) => (u.email || u.display_name) && S.roles.find((r) => r.id === u.role_id)?.name !== 'Eltern') : [];
@@ -780,7 +804,7 @@ function viewProfile() {
   const kids = S.myKids.map((k) => {
     const mine = S.guardMine?.[k.id] || '';
     return `<form class="kidedit" data-f="myKid"><input type="hidden" name="id" value="${esc(k.id)}">
-      <b>${esc(k.name)}</b>
+      <div class="pphoto">${avatar(k.id)}<div><b>${esc(k.name)}</b><br><button type="button" class="btn small ghost" data-a="kidPhoto" data-k="${k.id}">${S.photos[k.id] ? 'Foto ändern' : 'Foto hinzufügen'}</button>${S.photos[k.id] ? ' <button type="button" class="link danger" data-a="kidPhotoDel" data-k="${k.id}">Foto entfernen</button>' : ''}</div></div>
       <label>Telefon (mehrere mit ; trennen)<input name="phone" value="${esc(k.phone || '')}" autocomplete="tel"></label>
       <label>Geburtstag<input name="birth" type="date" value="${esc(k.birthdate || '')}"></label>
       <label>E-Mail <span class="req">*</span><input name="email" type="email" required value="${esc(mine || S.parentEmail || '')}" autocomplete="email"></label>
@@ -906,6 +930,22 @@ const A = {
     const k = S.allKids.find((x) => x.id === d.id);
     const v = prompt('Telefonnummern (mehrere mit ; trennen, z. B. 0176 123 (Mama); 0151 456 (Papa))', k?.phone || ''); if (v === null) return;
     ok(await sb.from('kids').update({ phone: v.trim() || null }).eq('id', d.id)); await loadAll(); render();
+  },
+  async kidPhoto(d) {
+    const r = await askModal('Foto von deinem Kind', 'Das Foto sehen nur du und die Trainer im Verein. Es erscheint in den Listen der Trainer. Bitte lade nur ein Foto hoch, das nur dein Kind zeigt und mit dem du einverstanden bist. Du kannst es jederzeit wieder entfernen.', [['yes', 'Einverstanden, Foto wählen', 'primary'], ['', 'Abbrechen', 'link']]);
+    if (r !== 'yes') return;
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => run(async () => {
+      const f = inp.files?.[0]; if (!f) return;
+      const data = await resizePhoto(f);
+      ok(await sb.rpc('set_kid_photo', { p_kid: d.k, p_data: data, p_consent: true }));
+      await loadPhotos(); render(); toast('Foto gespeichert');
+    });
+    inp.click();
+  },
+  async kidPhotoDel(d) {
+    if (!confirm('Foto entfernen?')) return;
+    ok(await sb.rpc('clear_kid_photo', { p_kid: d.k })); delete S.photos[d.k]; delete S.photoVer[d.k]; await loadPhotos(); render(); toast('Foto entfernt');
   },
   async kidSecond(d) {
     ok(await sb.from('kids').update({ allow_second: d.v === 'true' }).eq('id', d.id)); await loadAll(); render();

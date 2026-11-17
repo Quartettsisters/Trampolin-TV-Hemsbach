@@ -140,3 +140,6 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .mmain.kg .tag { background: rgba(255,255,255,.26); border: 1px solid rgba(255,255,255,.85); color: #fff; }
 .mmain.kg .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
 .mrow:has(.kg) { border-top: 0; }
+
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pphoto { display: flex; align-items: center; gap: 12px; } .pphoto .avatar { width: 64px; height: 64px; flex: none; } .pphoto .btn { margin-top: 6px; }
