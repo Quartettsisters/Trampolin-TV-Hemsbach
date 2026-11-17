@@ -13,6 +13,13 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('de-DE') : '');
 const dkey = (d) => new Date(d).toLocaleDateString('sv-SE'); // YYYY-MM-DD in lokaler Zeit
 const tm = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 const mondayOf = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+const MON = { jan: 1, feb: 2, mär: 3, mar: 3, apr: 4, mai: 5, jun: 6, jul: 7, aug: 8, sep: 9, okt: 10, nov: 11, dez: 12 };
+const parseReq = (t) => {
+  if (!t) return null; t = String(t).trim();
+  let m = t.match(/^(\d{1,2})\/(\d{4})$/); if (m) return `${m[2]}-${m[1].padStart(2, '0')}-01`;
+  m = t.match(/^([A-Za-zäöüÄÖÜ]+)'(\d{2})$/); if (m && MON[m[1].slice(0, 3).toLowerCase()]) return `20${m[2]}-${String(MON[m[1].slice(0, 3).toLowerCase()]).padStart(2, '0')}-01`;
+  return null;
+};
 const ageOf = (d) => {
   if (!d) return '';
   const b = new Date(d), n = new Date();
@@ -445,8 +452,10 @@ function viewNew() {
 
 function wlFiltered() {
   const q = S.wlQuery.trim().toLowerCase();
+  // älteste Anfrage zuerst (Warteschlange); ohne Datum ans Ende
   return S.waitlist.filter((w) => w.status === S.wlFilter &&
-    (!q || `${w.first_name} ${w.last_name} ${w.email} ${w.phone}`.toLowerCase().includes(q)));
+    (!q || `${w.first_name} ${w.last_name} ${w.email} ${w.phone}`.toLowerCase().includes(q)))
+    .sort((a, b) => (a.requested_on || '9999').localeCompare(b.requested_on || '9999') || String(a.created_at).localeCompare(String(b.created_at)));
 }
 function wlList() {
   const list = wlFiltered();
@@ -476,7 +485,7 @@ function viewWaitlist() {
     ${!can('waitlist_manage') ? '' : `<details class="card"><summary>Neuer Interessent</summary><form data-f="newWl">
       <label>Vorname<input name="first_name" required></label><label>Nachname<input name="last_name"></label>
       <label>Geburtsdatum<input name="birthdate" type="date"></label><label>E-Mail<input name="email" type="email"></label>
-      <label>Telefon<input name="phone" type="tel"></label><label>Angefragt am<input name="requested" placeholder="z. B. Mai'25"></label>
+      <label>Telefon<input name="phone" type="tel"></label><label>Angefragt (Monat)<input name="requested_on" type="month" required></label>
       <label>Notiz<input name="note"></label><button class="btn">Hinzufügen</button></form></details>
     <details class="card"><summary>Aus Excel importieren</summary>
       <p class="small muted">Deine Datei „Warteliste.xlsx“ mit den Blättern Warteliste, Zusagen, Absagen, keine Rückmeldung. Die Datei wird nur im Browser gelesen.</p>
@@ -736,7 +745,7 @@ const A = {
   importCancel() { S.importPreview = null; render(); },
   async importGo() {
     const rows = S.importPreview;
-    for (let i = 0; i < rows.length; i += 100) ok(await sb.from('waitlist').insert(rows.slice(i, i + 100)));
+    for (let i = 0; i < rows.length; i += 100) ok(await sb.from('waitlist').insert(rows.slice(i, i + 100).map((r) => ({ ...r, requested_on: parseReq(r.requested) }))));
     S.importPreview = null; await loadAll(); render(); toast(`${rows.length} Einträge importiert`);
   },
 };
@@ -799,7 +808,7 @@ const F = {
   },
   async newWl(f) {
     const row = { first_name: f.first_name.trim(), last_name: f.last_name?.trim() || null, birthdate: f.birthdate || null,
-      email: f.email || null, phone: f.phone || null, requested: f.requested || null, note: f.note || null };
+      email: f.email || null, phone: f.phone || null, requested: f.requested_on ? new Date(f.requested_on + '-01').toLocaleDateString('de-DE', { month: 'long', year: '2-digit' }).replace(' ', "'") : null, requested_on: f.requested_on ? f.requested_on + '-01' : null, note: f.note || null };
     ok(await sb.from('waitlist').insert(row)); await loadAll(); render(); toast('Hinzugefügt');
   },
 };

@@ -98,7 +98,8 @@ create table public.waitlist (
   birthdate date,
   email text,
   phone text,
-  requested text,                 -- "angefragt am" (frei, z. B. "April'24")
+  requested text,
+  requested_on date,   -- Anfragedatum (Monat), danach wird die Warteliste sortiert                 -- "angefragt am" (frei, z. B. "April'24")
   requested_again text,
   contacted_at date,              -- angeschrieben
   tue boolean not null default false,
