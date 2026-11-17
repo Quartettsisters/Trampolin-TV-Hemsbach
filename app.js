@@ -268,9 +268,9 @@ function visibleSessions() {
 function sessionCardParent(s) {
   const rows = S.myKids.filter((k) => inGroup(k, s.grp)).map((k) => {
     const r = S.regs.find((x) => x.session_id === s.id && x.kid_id === k.id);
-    const st = r?.status;
+    const st = r?.status || 'going';
     const badge = st === 'going' ? '<span class="badge green">Dabei</span>'
-      : st === 'declined' ? '<span class="badge red">Abgesagt</span>' : '<span class="badge gray">Keine Antwort</span>';
+      : '<span class="badge red">Abgesagt</span>';
     const btns = s.cancelled ? '' : `<div class="btns">
       <button class="btn ${st === 'going' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">Zusagen</button>
       <button class="btn ghost ${st === 'declined' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="no">Absagen</button></div>`;
@@ -351,18 +351,18 @@ function viewTermine() {
 function detailTrainer(s) {
   const regs = S.detail[s.id];
   if (!regs) return '<p class="muted small" style="padding:0 14px 12px">Lädt…</p>';
-  const by = (st) => regs.filter((r) => r.status === st);
-  const answered = new Set(regs.map((r) => r.kid_id));
-  const none = S.allKids.filter((k) => k.active && inGroup(k, s.grp) && !answered.has(k.id));
-  const mg = can('registrations_manage');
-  const going = by('going').map((r) => `<label class="line"><input type="checkbox" data-a="attend" data-r="${r.id}" ${r.attended ? 'checked' : ''} ${can('attendance_manage') ? '' : 'disabled'}> ${esc(r.kids?.name)}${mg ? `<button class="x" data-a="answer" data-s="${s.id}" data-k="${r.kid_id}" data-v="none" title="Entfernen">✕</button>` : ''}</label>`).join('');
-  const dec = by('declined').map((r) => esc(r.kids?.name)).join(', ');
-  const nores = none.map((k) => (mg ? `<button class="chip" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">${esc(k.name)} ＋</button>` : `<span class="chip">${esc(k.name)}</span>`)).join('');
+  const mg = can('registrations_manage'), att = can('attendance_manage') && new Date(s.starts_at) <= new Date();
+  const kids = S.allKids.filter((k) => k.active && inGroup(k, s.grp));
+  const reg = (k) => regs.find((r) => r.kid_id === k.id);
+  const out = kids.filter((k) => reg(k)?.status === 'declined'), inn = kids.filter((k) => reg(k)?.status !== 'declined');
+  const btn = (k, v, on, ic) => `<button class="rb ${on ? (v === 'yes' ? 'yes' : 'no') : ''}" ${mg ? `data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="${v}"` : 'disabled'}>${ic}</button>`;
+  const row = (k, going) => `<div class="prow">${avatar()}<span class="pn">${esc(k.name)}</span>
+    ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
+    ${btn(k, 'yes', going, '👍')}${btn(k, 'no', !going, '👎')}</div>`;
   const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
   return `<div class="sdetail">
-    ${going ? `<h3>Dabei${can('attendance_manage') ? ' · abhaken' : ''}</h3>${going}` : '<p class="muted small">Noch keine Zusagen.</p>'}
-    ${dec ? `<h3>Abgesagt</h3><p class="small">${dec}</p>` : ''}
-    ${nores ? `<h3>Noch offen${mg ? ' · antippen = zusagen' : ''}</h3><div class="chips">${nores}</div>` : ''}${manage}</div>`;
+    <div class="sh"><span>Zugesagt</span><b>${inn.length}</b></div>${inn.map((k) => row(k, true)).join('') || '<p class="muted small">Niemand</p>'}
+    <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}${manage}</div>`;
 }
 
 function viewNew() {
@@ -538,11 +538,11 @@ const A = {
   tab(d) { S.tab = d.t; render(); },
   async answer(d) {
     const r = ok(await sb.rpc('set_response', { p_session: d.s, p_kid: d.k, p_answer: d.v }));
-    toast(r === 'going' ? 'Zugesagt ✔' : r === 'declined' ? 'Abgesagt' : 'Aktualisiert');
+    toast(r === 'going' ? 'Dabei ✔' : r === 'declined' ? 'Abgesagt' : 'Aktualisiert');
     await refreshSessions();
   },
   async toggle(d) { S.open = S.open === d.s ? null : d.s; if (S.open) await loadDetail(S.open); render(); },
-  async attend(d, el) { ok(await sb.from('registrations').update({ attended: el.checked }).eq('id', d.r)); },
+  async attend(d, el) { ok(await sb.rpc('set_attended', { p_session: d.s, p_kid: d.k, p_attended: el.checked })); },
   async cancelSession(d) { ok(await sb.from('sessions').update({ cancelled: d.v === 'true' }).eq('id', d.s)); await refreshSessions(); },
   async deleteSession(d) { if (!confirm('Termin samt Anmeldungen löschen?')) return; ok(await sb.from('sessions').delete().eq('id', d.s)); S.open = null; await refreshSessions(); },
   async kidDay(d) {

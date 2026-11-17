@@ -63,7 +63,7 @@ create table public.registrations (
   id uuid primary key default gen_random_uuid(),
   session_id uuid not null references public.sessions on delete cascade,
   kid_id uuid not null references public.kids on delete cascade,
-  status text not null check (status in ('going','declined')),   -- kein Eintrag = noch keine Antwort
+  status text not null check (status in ('going','declined')),   -- kein Eintrag = dabei (Standard)
   attended boolean,
   unique (session_id, kid_id)
 );
@@ -171,12 +171,25 @@ begin
   raise exception 'Unbekannte Antwort';
 end $$;
 
--- Anzahl Zusagen pro Termin (ohne Namen) für alle angemeldeten Nutzer
+-- Standard: alle aktiven Kinder der Gruppe sind dabei, gespeichert werden nur Absagen.
 create function public.session_counts() returns table (session_id uuid, going int)
 language sql stable security definer set search_path = public as $$
-  select session_id, count(*) filter (where status = 'going')::int
-  from registrations group by session_id
+  select s.id,
+    (select count(*) from kids k where k.active and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri)))::int
+    - (select count(*) from registrations r join kids k on k.id = r.kid_id
+       where r.session_id = s.id and r.status = 'declined' and k.active and ((s.grp = 'tue' and k.tue) or (s.grp = 'fri' and k.fri)))::int
+  from sessions s
 $$;
+
+create function public.set_attended(p_session uuid, p_kid uuid, p_attended boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not has_perm('attendance_manage') then raise exception 'Nicht erlaubt'; end if;
+  insert into registrations (session_id, kid_id, status, attended) values (p_session, p_kid, 'going', p_attended)
+    on conflict (session_id, kid_id) do update set attended = p_attended where registrations.status = 'going';
+end $$;
+revoke all on function public.set_attended(uuid, uuid, boolean) from public, anon;
+grant execute on function public.set_attended(uuid, uuid, boolean) to authenticated;
 
 -- Eigene Anmeldungen
 create function public.my_registrations() returns table (session_id uuid, kid_id uuid, status text)
