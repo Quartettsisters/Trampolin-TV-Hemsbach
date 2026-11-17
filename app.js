@@ -686,6 +686,7 @@ function wlList() {
       ${S.mailLog?.[w.id]?.length ? `<p class="small muted">Zuletzt gemailt: ${esc(fmtDate(S.mailLog[w.id][0].sent_at))} (${esc(S.mailLog[w.id][0].subject)})</p>` : ''}
       ${can('registrations_manage') && S.wlInv?.[w.id]?.length ? `<button class="link danger" data-a="withdrawInvite" data-id="${w.id}">Einladung zurücknehmen</button>` : ''}
       ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
+      ${can('waitlist_manage') ? `<div class="btns"><button class="chip ${w.tue ? 'on' : ''}" data-a="wlDay" data-id="${w.id}" data-d="tue">Dienstag</button><button class="chip ${w.fri ? 'on' : ''}" data-a="wlDay" data-id="${w.id}" data-d="fri">Freitag</button></div>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
       ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="trial">Mail senden</button>` : ''}</div>${w.trial_done ? `<div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="offer">Mail senden</button>` : ''}</div>` : '<p class="small muted" style="margin-top:8px">Platzangebot erst möglich, wenn das Kind beim Schnuppern war.</p>'}` : ''}
       ${can('waitlist_manage') ? `<label class="line"><input type="checkbox" data-a="trialDone" data-id="${w.id}" ${w.trial_done ? 'checked' : ''}> War beim Schnuppern da</label>` : ''}
@@ -710,7 +711,10 @@ function viewWaitlist() {
     ${!can('waitlist_manage') ? '' : `<details class="card"><summary>Neuer Interessent</summary><form data-f="newWl">
       <label>Vorname<input name="first_name" required></label><label>Nachname<input name="last_name"></label>
       <label>Geburtsdatum<input name="birthdate" type="date"></label><label>E-Mail<input name="email" type="email"></label>
-      <label>Telefon<input name="phone" type="tel"></label><label>Angefragt (Monat)<input name="requested_on" type="month" required></label>
+      <label>Telefon<input name="phone" type="tel"></label>
+      <div class="small muted" style="margin-top:8px">Gewünschter Trainingstag <span class="req">*</span></div>
+      <label class="line"><input type="checkbox" name="tue"> Dienstag</label><label class="line"><input type="checkbox" name="fri"> Freitag</label>
+      <label>Angefragt (Monat)<input name="requested_on" type="month" required></label>
       <label>Notiz<input name="note"></label><button class="btn">Hinzufügen</button></form></details>
     <details class="card"><summary>Aus Excel importieren</summary>
       <p class="small muted">Deine Datei „Warteliste.xlsx“ mit den Blättern Warteliste, Zusagen, Absagen, keine Rückmeldung. Die Datei wird nur im Browser gelesen.</p>
@@ -1033,6 +1037,11 @@ const A = {
     });
     document.body.appendChild(el);
   },
+  async wlDay(d) {
+    const w = S.waitlist.find((x) => x.id === d.id); if (!w) return;
+    const v = !w[d.d];
+    ok(await sb.from('waitlist').update({ [d.d]: v }).eq('id', d.id)); w[d.d] = v; render(); toast('Gespeichert');
+  },
   async wlNote(d, el) {
     const v = el.value.trim() || null;
     ok(await sb.from('waitlist').update({ note: v }).eq('id', d.id));
@@ -1136,7 +1145,8 @@ const F = {
     await loadAll(); render(); toast('Gesendet');
   },
   async newWl(f) {
-    const row = { first_name: f.first_name.trim(), last_name: f.last_name?.trim() || null, birthdate: f.birthdate || null,
+    if (f.tue !== 'on' && f.fri !== 'on') throw new Error('Bitte Dienstag und/oder Freitag wählen.');
+    const row = { tue: f.tue === 'on', fri: f.fri === 'on', first_name: f.first_name.trim(), last_name: f.last_name?.trim() || null, birthdate: f.birthdate || null,
       email: f.email || null, phone: f.phone || null, requested: f.requested_on ? new Date(f.requested_on + '-01').toLocaleDateString('de-DE', { month: 'long', year: '2-digit' }).replace(' ', "'") : null, requested_on: f.requested_on ? f.requested_on + '-01' : null, note: f.note || null };
     ok(await sb.from('waitlist').insert(row)); await loadAll(); render(); toast('Hinzugefügt');
   },
