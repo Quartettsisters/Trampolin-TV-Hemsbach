@@ -406,3 +406,19 @@ create table public.mail_log (
 );
 alter table public.mail_log enable row level security;
 create policy mail_log_read on public.mail_log for select to authenticated using (has_perm('waitlist_view'));
+
+-- Schnupper-Einladung: angebotene Termine (confirmed=false) werden erst bei Zusage bestätigt
+alter table public.session_guests add column if not exists confirmed boolean not null default true;
+create policy guests_confirm on public.session_guests for update to authenticated
+  using (has_perm('registrations_manage')) with check (has_perm('registrations_manage'));
+create function public.confirm_guest(p_guest uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare w uuid;
+begin
+  if not has_perm('registrations_manage') then raise exception 'Nicht erlaubt'; end if;
+  update session_guests set confirmed = true where id = p_guest returning waitlist_id into w;
+  if w is not null then delete from session_guests where waitlist_id = w and confirmed = false; end if;
+end $$;
+revoke all on function public.confirm_guest(uuid) from public, anon;
+grant execute on function public.confirm_guest(uuid) to authenticated;
+-- (session_counts zählt nur bestätigte Schnupperkinder: ... and g.confirmed)

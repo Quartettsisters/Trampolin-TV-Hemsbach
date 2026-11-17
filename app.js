@@ -182,8 +182,8 @@ async function loadAll() {
   S.mailLog = {};
   S.wlInv = {};
   if (can('registrations_view') && can('waitlist_view')) {
-    const gq = await sb.from('session_guests').select('waitlist_id, sessions(starts_at)').not('waitlist_id', 'is', null);
-    (gq.data || []).forEach((x) => { if (x.sessions) (S.wlInv[x.waitlist_id] ||= []).push(x.sessions.starts_at); });
+    const gq = await sb.from('session_guests').select('waitlist_id, confirmed, sessions(starts_at)').not('waitlist_id', 'is', null);
+    (gq.data || []).forEach((x) => { if (x.sessions && (x.confirmed === false || new Date(x.sessions.starts_at) > new Date())) { const a = (S.wlInv[x.waitlist_id] ||= []); if (!a.includes(x.sessions.starts_at)) a.push(x.sessions.starts_at); } });
     Object.values(S.wlInv).forEach((a) => a.sort());
     const ml = await sb.from('mail_log').select('waitlist_id, subject, sent_at').order('sent_at', { ascending: false });
     (ml.data || []).forEach((m) => { (S.mailLog[m.waitlist_id] ||= []).push(m); });
@@ -234,10 +234,11 @@ async function inviteFlow(w) {
   const nm = [w.first_name, w.last_name].filter(Boolean).join(' ');
   const ids = await pickSessions(nm);
   if (!ids) return false;
-  if (can('registrations_manage')) ok(await sb.from('session_guests').insert(ids.map((id) => ({ session_id: id, name: nm, waitlist_id: w.id }))));
+  if (can('registrations_manage')) await sb.from('session_guests').delete().eq('waitlist_id', w.id).eq('confirmed', false);
+  if (can('registrations_manage')) ok(await sb.from('session_guests').insert(ids.map((id) => ({ session_id: id, name: nm, waitlist_id: w.id, confirmed: false }))));
   const first = S.sessions.filter((x) => ids.includes(x.id)).map((x) => x.starts_at).sort()[0];
   ok(await sb.from('waitlist').update({ status: 'invited', trial: true, trial_on: first ? dkey(first) : null }).eq('id', w.id));
-  toast('Eingeladen, als Schnupperkind eingetragen');
+  toast('Eingeladen');
   return true;
 }
 
@@ -436,10 +437,11 @@ function detailTrainer(s) {
     ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
     ${btn(k, 'yes', going, ic('check'))}${btn(k, 'no', !going, ic('x'))}</div>`;
   const manage = can('sessions_manage') ? `<div class="btns"><button class="link" data-a="setGrp" data-s="${s.id}" data-v="${s.grp === 'all' ? (new Date(s.starts_at).getDay() === 5 ? 'fri' : 'tue') : 'all'}">${s.grp === 'all' ? 'Nur ' + (new Date(s.starts_at).getDay() === 5 ? 'Freitag' : 'Dienstag') : 'Für beide Gruppen öffnen'}</button><button class="link" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Training absagen'}</button><button class="link danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
-  const gl = S.guests[s.id] || [];
+  const gl = (S.guests[s.id] || []).filter((g) => g.confirmed !== false), offers = (S.guests[s.id] || []).filter((g) => g.confirmed === false);
   const wl = (S.waitlist || []).filter((w) => ['waiting', 'invited'].includes(w.status));
   const guestBox = `<div class="sh"><span>Schnupperkinder</span><b>${gl.length}</b></div>
     ${gl.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${att ? `<label class="att"><input type="checkbox" data-a="guestAttend" data-g="${g.id}" ${g.attended ? 'checked' : ''}> da</label>` : ''}${mg ? `<button class="link danger" data-a="delGuest" data-s="${s.id}" data-g="${g.id}">Löschen</button>` : ''}</div>`).join('')}
+    ${offers.length ? `<div class="sh"><span>Eingeladen, Antwort offen</span><b>${offers.length}</b></div>${offers.map((g) => `<div class="prow">${avatar()}<span class="pn">${esc(g.name)}</span>${mg ? `<button class="btn small" data-a="confirmGuest" data-s="${s.id}" data-g="${g.id}">Kommt zu diesem Termin</button><button class="x" data-a="delGuest" data-s="${s.id}" data-g="${g.id}" title="Entfernen">${ic('x')}</button>` : ''}</div>`).join('')}` : ''}
     ${mg ? `<form data-f="newGuest" class="inline"><input type="hidden" name="s" value="${s.id}"><label>Name<input name="name" list="wl-${s.id}" placeholder="Name oder aus Warteliste wählen" required autocomplete="off"></label>
       <datalist id="wl-${s.id}">${wl.map((w) => `<option value="${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}">`).join('')}</datalist><button class="btn">+</button></form>` : ''}`;
   return `<div class="sdetail">
@@ -526,7 +528,7 @@ function wlList() {
     const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
       ${S.mailLog?.[w.id]?.length ? `<p class="small muted">Zuletzt gemailt: ${esc(fmtDate(S.mailLog[w.id][0].sent_at))} (${esc(S.mailLog[w.id][0].subject)})</p>` : ''}
-      ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
+      ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' oder ')} Uhr</p>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
       ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="trial">Mail senden</button>` : ''}</div>${w.trial_done ? `<div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="offer">Mail senden</button>` : ''}</div>` : '<p class="small muted" style="margin-top:8px">Platzangebot erst möglich, wenn das Kind beim Schnuppern war.</p>'}` : ''}
       ${can('waitlist_manage') ? `<label class="line"><input type="checkbox" data-a="trialDone" data-id="${w.id}" ${w.trial_done ? 'checked' : ''}> War beim Schnuppern da</label>` : ''}
@@ -682,6 +684,7 @@ const A = {
   async setGrp(d) { ok(await sb.from('sessions').update({ grp: d.v }).eq('id', d.s)); toast('Gespeichert'); await refreshSessions(); },
   async guestAttend(d, el) { ok(await sb.rpc('set_guest_attended', { p_guest: d.g, p_attended: el.checked })); toast(el.checked ? 'Als anwesend vermerkt' : 'Vermerk entfernt'); await loadAll(); },
   async trialDone(d, el) { ok(await sb.from('waitlist').update({ trial_done: el.checked }).eq('id', d.id)); await loadAll(); render(); },
+  async confirmGuest(d) { ok(await sb.rpc('confirm_guest', { p_guest: d.g })); toast('Schnupperkind eingetragen'); await loadDetail(d.s); await refreshSessions(); },
   async delGuest(d) { ok(await sb.from('session_guests').delete().eq('id', d.g)); await loadDetail(d.s); await refreshSessions(); },
   async cancelSession(d) {
     const cancel = d.v === 'true';
