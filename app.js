@@ -292,15 +292,16 @@ function viewWaitForm() {
   if (S.waitDone) return `<div class="card"><h1>Vielen Dank!</h1><p>Wir haben Ihre Anfrage erhalten und Ihr Kind auf die Warteliste gesetzt. Sobald ein Platz frei wird oder ein Schnuppertraining möglich ist, melden wir uns bei Ihnen.</p><p class="muted small">Mit sportlichen Grüßen,<br>das Trampolin-Team des TV Hemsbach</p></div>`;
   return `<div class="card"><h1>Warteliste Trampolin</h1>
     <p>Aktuell können wir leider keine neuen Kinder aufnehmen. Über dieses Formular setzen wir Ihr Kind auf die Warteliste. Das Training findet dienstags und freitags jeweils von 17:30 bis 20:00 Uhr statt.</p>
+    <p class="small muted" style="margin:4px 0 0"><span class="req">*</span> Alle Felder sind Pflichtfelder.</p>
     <form data-f="submitWait">
-      <label>Vorname des Kindes<input name="first" required maxlength="60" autocomplete="off"></label>
-      <label>Nachname des Kindes<input name="last" maxlength="60" autocomplete="off"></label>
-      <label>Geburtsdatum des Kindes<input name="birth" type="date" required></label>
-      <label>Telefonnummer (mobil)<input name="phone" type="tel" required autocomplete="tel"></label>
-      <label>E-Mail-Adresse<input name="email" type="email" required autocomplete="email"></label>
-      <label>Gewünschter Trainingstag<select name="day" required><option value="">Bitte wählen</option><option value="tue">Dienstag</option><option value="fri">Freitag</option><option value="both">Dienstag oder Freitag</option></select></label>
+      <label>Vorname des Kindes <span class="req">*</span><input name="first" required minlength="2" maxlength="60" autocomplete="off"></label>
+      <label>Nachname des Kindes <span class="req">*</span><input name="last" required minlength="2" maxlength="60" autocomplete="off"></label>
+      <label>Geburtsdatum des Kindes <span class="req">*</span><input name="birth" type="date" required></label>
+      <label>Telefonnummer (mobil) <span class="req">*</span><input name="phone" type="tel" required minlength="6" autocomplete="tel"></label>
+      <label>E-Mail-Adresse <span class="req">*</span><input name="email" type="email" required autocomplete="email"></label>
+      <label>Gewünschter Trainingstag <span class="req">*</span><select name="day" required><option value="" disabled selected>Bitte wählen</option><option value="tue">Dienstag</option><option value="fri">Freitag</option><option value="both">Dienstag oder Freitag</option></select></label>
       <input name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
-      <label class="line"><input type="checkbox" name="ok" required> Ich bin einverstanden, dass meine Angaben für die Verwaltung der Warteliste und die Kontaktaufnahme gespeichert werden.</label>
+      <label class="line"><input type="checkbox" name="ok" required> Ich bin damit einverstanden, dass meine Angaben für die Verwaltung der Warteliste und die Kontaktaufnahme gespeichert werden. <span class="req">*</span></label>
       <button class="btn big">Auf die Warteliste setzen</button></form>
     <p class="muted small">Die Angaben werden nur vom Trainerteam des TV Hemsbach gesehen und nur für die Warteliste verwendet.</p></div>`;
 }
