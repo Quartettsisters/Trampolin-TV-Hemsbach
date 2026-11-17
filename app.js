@@ -459,9 +459,30 @@ function wlFiltered() {
 }
 const waNumber = (p) => { let d = String(p || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (d.startsWith('0')) return '49' + d.slice(1); return d.length >= 10 ? d : '49' + d; };
 function inviteText(w) {
-  const name = w.first_name, dates = (S.wlInv?.[w.id] || []).map((x) => new Date(x).toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr');
-  const when = dates.length ? `zum Schnuppertraining am ${dates.join(' oder am ')}` : 'zum Schnuppertraining';
-  return `Hallo, hier ist die Trampolin-Abteilung des TV Hemsbach. Wir haben einen Platz frei und laden ${name} ${when} in die Halle ein (jeweils 17:30–20:00 Uhr). Bitte gebt kurz Bescheid, ob es klappt. Viele Grüße`;
+  const inv = S.wlInv?.[w.id] || [];
+  const fmtD = (x) => new Date(x).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
+  const wds = new Set(inv.map((x) => new Date(x).getDay()));
+  const days = wds.size ? [...wds].map((d) => (d === 2 ? 'dienstags' : 'freitags')) : [w.tue && 'dienstags', w.fri && 'freitags'].filter(Boolean);
+  const day = (days.length ? [...new Set(days)] : ['freitags']).join(' und ');
+  const first = inv.length ? `Ein erstes Schnuppertraining ist am ${inv.map(fmtD).join(' oder am ')} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
+  return `Liebe Eltern,
+
+wir freuen uns, euch in unserem Training ${day} von 17:30-20 Uhr einen Platz anbieten zu können.
+
+Das Training findet in der BiZ-Halle des Gymnasiums/Carl-Engler-Realschule statt. Wir treffen uns vor der Halle auf dem Parkplatz und betreten die Halle nur gemeinsam.
+
+Zum Training werden Socken/Schläppchen, Sportkleidung (elastische Hose ohne Bänder oder Reißverschlüsse), (bei langen Haaren) ein Haargummi und eine Trinkflasche benötigt.
+
+${first}
+
+Bitte gebt uns eine kurze Rückmeldung, ob Interesse besteht.
+
+Mit sportlichen Grüßen,
+
+Jarina Adams
+Trampolin Trainer
+BA. Sportwissenschaften
+TV Hemsbach`;
 }
 function wlList() {
   const list = wlFiltered();
