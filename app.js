@@ -53,7 +53,7 @@ const S = {
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
   inviteCode: '', invites: [], invite: null, lastInvite: null,
   activity: {}, openKid: null, kidFilter: 'all', kidView: 'list',
-  termView: 'cal', calMode: 'month', calMonth: { y: new Date().getFullYear(), m: new Date().getMonth() }, calWeek: mondayOf(new Date()), calDay: dkey(new Date()),
+  termView: 'list', calMode: 'month', calMonth: { y: new Date().getFullYear(), m: new Date().getMonth() }, calWeek: mondayOf(new Date()), calDay: dkey(new Date()),
 };
 
 function toast(msg) {
@@ -195,6 +195,11 @@ function render() {
     : viewMain();
 }
 
+function viewMore() {
+  const row = (t, i, l) => `<button class="mrow-btn" data-a="tab" data-t="${t}"><span>${i}</span>${l}<em>›</em></button>`;
+  return `<div class="list">${can('sessions_manage') ? row('neu', '➕', 'Trainings anlegen') : ''}${can('users_manage') ? row('nutzer', '🔑', 'Team & Rollen') : ''}${row('profil', '👤', 'Mein Profil')}</div>`;
+}
+
 function viewInvite() {
   return `<div class="card"><h1>Willkommen</h1><h2>Einladung ins Team</h2>
     <p>Du wurdest eingeladen, bei den Trainern mitzumachen.</p>
@@ -227,18 +232,21 @@ function viewLogin() {
 }
 
 function viewMain() {
+  const more = can('sessions_manage') || can('users_manage');
   const tabs = [
     ['termine', '📅', 'Termine', true],
-    ['neu', '➕', 'Neu', can('sessions_manage')],
+    ['kinder', '👥', 'Mitglieder', can('kids_manage') || can('kids_view')],
     ['interessenten', '⏳', 'Warteliste', can('waitlist_view')],
-    ['kinder', '🤸', 'Mitglieder', can('kids_manage') || can('kids_view')],
-    ['nutzer', '🔑', 'Nutzer', can('users_manage')],
     ['news', '💬', 'News', true],
-    ['profil', '👤', 'Profil', true],
+    ['mehr', '☰', 'Mehr', more],
+    ['profil', '👤', 'Profil', !more],
   ].filter((t) => t[3]);
-  if (!tabs.some((t) => t[0] === S.tab)) S.tab = 'termine';
-  const body = { termine: viewTermine, neu: viewNew, interessenten: viewWaitlist, kinder: viewKids, nutzer: viewUsers, news: viewNews, profil: viewProfile }[S.tab]();
-  return `<main>${body}</main><nav>${tabs.map(([k, i, l]) => `<button class="${S.tab === k ? 'on' : ''}" data-a="tab" data-t="${k}"><span>${i}</span>${l}</button>`).join('')}</nav>`;
+  const sub = more ? ['neu', 'nutzer', 'profil'] : [];
+  if (!tabs.some((t) => t[0] === S.tab) && !sub.includes(S.tab)) S.tab = 'termine';
+  const active = (k) => S.tab === k || (k === 'mehr' && sub.includes(S.tab));
+  const back = sub.includes(S.tab) ? '<button class="link" data-a="tab" data-t="mehr">‹ Zurück</button>' : '';
+  const body = back + { termine: viewTermine, neu: viewNew, interessenten: viewWaitlist, kinder: viewKids, nutzer: viewUsers, news: viewNews, profil: viewProfile, mehr: viewMore }[S.tab]();
+  return `<main>${body}</main><nav>${tabs.map(([k, i, l]) => `<button class="${active(k) ? 'on' : ''}" data-a="tab" data-t="${k}"><span>${i}</span>${l}</button>`).join('')}</nav>`;
 }
 
 function sessionHead(s) {
@@ -308,7 +316,7 @@ function viewCalendar() {
     const first = new Date(y, m, 1), off = (first.getDay() + 6) % 7, total = Math.ceil((off + new Date(y, m + 1, 0).getDate()) / 7) * 7;
     const cells = Array.from({ length: total }, (_, i) => new Date(y, m, 1 - off + i)).map((d) => {
       const k = dkey(d);
-      const chips = (by[k] || []).map((s) => `<div class="cs ${s.grp}${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}</div>`).join('');
+      const chips = (by[k] || []).map((s) => `<div class="cs${s.cancelled ? ' x' : ''}">${esc(s.title)}</div>`).join('');
       const bd = bdaysOn(d).map((x) => `<div class="bd">🎂 ${esc(x.name.split(' ')[0])}</div>`).join('');
       return `<div class="cd ${d.getMonth() !== m ? 'oth' : ''} ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><span class="dn">${d.getDate()}</span>${chips}${bd}</div>`;
     }).join('');
@@ -316,7 +324,7 @@ function viewCalendar() {
   } else {
     grid = Array.from({ length: 7 }, (_, i) => new Date(wk0.getFullYear(), wk0.getMonth(), wk0.getDate() + i)).map((d) => {
       const k = dkey(d);
-      const ss = (by[k] || []).map((s) => `<div class="cs wide ${s.grp}${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''} ${esc(s.title)} · ${DAY[s.grp]}${s.cancelled ? ' (abgesagt)' : ''}</div>`).join('');
+      const ss = (by[k] || []).map((s) => `<div class="cs wide${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''} ${esc(s.title)} · ${DAY[s.grp]}${s.cancelled ? ' (abgesagt)' : ''}</div>`).join('');
       const bd = bdaysOn(d).map((x) => `<div class="bd">🎂 ${esc(x.name)}</div>`).join('');
       return `<div class="wrow ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><b>${WD[(d.getDay() + 6) % 7]} ${d.getDate()}.${d.getMonth() + 1}.</b><div>${ss || '<span class="muted small">–</span>'}${bd}</div></div>`;
     }).join('');
@@ -437,7 +445,7 @@ function viewUsers() {
 
 const phones = (k) => String(k.phone || '').split(/[;\n]+/).map((x) => x.trim()).filter(Boolean);
 const phoneLinks = (k) => phones(k).map((p) => `<a href="tel:${esc(p.replace(/\(.*?\)/g, '').replace(/[^\d+]/g, ''))}">${esc(p)}</a>`).join('<br>') || '–';
-const avatar = (name) => `<span class="avatar">${esc((name || '?').trim()[0]?.toUpperCase())}</span>`;
+const avatar = () => '<span class="avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4.3" fill="#fff"/><path d="M3.3 24c0-5.6 4-8.6 8.7-8.6s8.7 3 8.7 8.6z" fill="#fff"/></svg></span>';
 function kidTags(k) {
   return `${k.tue ? '<span class="tag tue">Dienstag</span>' : ''}${k.fri ? '<span class="tag fri">Freitag</span>' : ''}${!k.active ? '<span class="tag off">Inaktiv</span>' : ''}`;
 }
