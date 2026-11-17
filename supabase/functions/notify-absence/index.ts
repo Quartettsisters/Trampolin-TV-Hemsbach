@@ -38,7 +38,10 @@ Deno.serve(async (req) => {
   if (!vk) return json({ error: 'Push nicht eingerichtet' }, 500);
   webpush.setVapidDetails(vk.subject, vk.pub, vk.priv);
   const when = new Date(ses.starts_at).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'Europe/Berlin' });
-  const payload = JSON.stringify({ title: 'Absage', body: `${kid.name} hat für ${when} abgesagt.` });
+  const { data: cnt } = await admin.rpc('session_counts');
+  const left = (cnt ?? []).find((c: any) => c.session_id === session_id)?.going;
+  const rest = left == null ? '' : left === 1 ? ' Es bleibt 1 Kind.' : ` Es bleiben ${left} Kinder.`;
+  const payload = JSON.stringify({ title: 'Absage', body: `${kid.name} hat für ${when} abgesagt.${rest}` });
 
   const { data: subs } = await admin.from('push_subscriptions').select('*').in('user_id', staff);
   let sent = 0;
