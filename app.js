@@ -62,9 +62,11 @@ const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platfo
 const isAndroid = /android/i.test(navigator.userAgent);
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; renderInstall(); });
 window.addEventListener('appinstalled', () => { deferredPrompt = null; renderInstall(); });
+if (standalone()) localStorage.setItem('tc_installed', '1');
+if (navigator.getInstalledRelatedApps) navigator.getInstalledRelatedApps().then((a) => { if (a.length) { localStorage.setItem('tc_installed', '1'); renderInstall(); } }).catch(() => {});
 function renderInstall() {
   const el = $('#install');
-  if (standalone() || Date.now() < (+localStorage.getItem('tc_install_dismiss') || 0) || !(deferredPrompt || isIOS || isAndroid)) { el.innerHTML = ''; return; }
+  if (standalone() || localStorage.getItem('tc_installed') || Date.now() < (+localStorage.getItem('tc_install_dismiss') || 0) || !(deferredPrompt || isIOS || isAndroid)) { el.innerHTML = ''; return; }
   let inner;
   if (deferredPrompt) {
     inner = '<p style="margin:6px 0">Mit einem Tipp aufs Handy holen, dann ist sie immer sofort da.</p><button class="btn" data-i="install">Jetzt als App installieren</button>';
@@ -75,11 +77,13 @@ function renderInstall() {
   } else {
     inner = `<ol><li>Tippe oben rechts auf die <b>drei Punkte ⋮</b></li><li>Wähle <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b></li></ol>`;
   }
-  el.innerHTML = `<div class="inst"><b>📲 Als App aufs Handy holen</b>${inner}<button class="link" data-i="later">Später</button></div>`;
+  el.innerHTML = `<div class="inst"><b>📲 Als App aufs Handy holen</b>${inner}<p class="small" style="margin:6px 0;color:#ccc">Schon installiert? Dann öffne die App über das Symbol auf deinem Startbildschirm, nicht über den Link.</p>
+    <button class="link" data-i="have">Habe ich schon</button> <button class="link" data-i="later">Später</button></div>`;
 }
 $('#install').addEventListener('click', async (e) => {
   const a = e.target.closest('[data-i]')?.dataset.i;
   if (a === 'install' && deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; renderInstall(); }
+  if (a === 'have') { localStorage.setItem('tc_installed', '1'); renderInstall(); }
   if (a === 'later') { localStorage.setItem('tc_install_dismiss', Date.now() + 7 * 864e5); renderInstall(); }
 });
 

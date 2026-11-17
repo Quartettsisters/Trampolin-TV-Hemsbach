@@ -26,5 +26,12 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "id": "./",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://quartettsisters.github.io/Trampolin-TV-Hemsbach/manifest.webmanifest"
+    }
   ]
 }
