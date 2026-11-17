@@ -5,4 +5,4 @@ export const SUPABASE_URL = 'https://cslcsigezgxmkqrsryvj.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_yTsYJj_YIHA-yrEUpHLyQw_O2jE-AyA';
 
 // Optional für Push-Nachrichten (öffentlicher VAPID-Schlüssel, siehe README). Leer lassen = kein Push.
-export const VAPID_PUBLIC_KEY = '';
+export const VAPID_PUBLIC_KEY = 'BJt320vIoRucqEEjcl4-GEPMixDxBp4kN5ht9cuaK-va3P5HM8-SqBrmsmfImNvI2HmeIupMAN_DerQkY-Evf-4';

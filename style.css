@@ -90,3 +90,6 @@ nav button span { display: block; font-size: 1.25rem; line-height: 1.2; } nav bu
 .rb .ic { width: 20px; height: 20px; vertical-align: middle; } .rb.yes { color: #0c6b2b; } .rb.no { color: #a31212; } .rb { color: #555; filter: none; opacity: 1; } .rb:not(.yes):not(.no) { color: #9aa7a4; }
 .bd .ic, .msub .ic, .small .ic { width: 1em; height: 1em; vertical-align: -.15em; }
 #install .ico .ic { width: 1.1em; height: 1.1em; vertical-align: -.2em; } .btn .ic { width: 1.1em; height: 1.1em; }
+
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20; display: flex; align-items: flex-end; justify-content: center; padding: 12px; }
+.modal .box { background: #fff; border-radius: 18px; padding: 20px; width: 100%; max-width: 420px; text-align: center; margin-bottom: env(safe-area-inset-bottom); } .modal h2 { margin: 0 0 6px; color: var(--ink); font-size: 1.2rem; } .modal .link { display: block; margin: 8px auto 0; }

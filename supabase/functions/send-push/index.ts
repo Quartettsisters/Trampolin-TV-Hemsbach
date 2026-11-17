@@ -1,6 +1,6 @@
 // Edge Function: schickt eine Push-Nachricht an alle angemeldeten Geräte.
 // Erlaubt nur Nutzern mit dem Recht "messages_send".
-// Secrets: VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT (z. B. mailto:du@example.de)
+// VAPID-Schlüssel stehen in der Tabelle push_keys (nur per Service-Rolle lesbar).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 
@@ -22,9 +22,24 @@ Deno.serve(async (req) => {
   const { data: prof } = await admin.from('profiles').select('roles(perms)').eq('id', user.id).maybeSingle();
   if (!prof?.roles?.perms?.messages_send) return new Response('Forbidden', { status: 403, headers: cors });
 
-  const { title, body } = await req.json();
-  webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT')!, Deno.env.get('VAPID_PUBLIC')!, Deno.env.get('VAPID_PRIVATE')!);
-  const { data: subs } = await admin.from('push_subscriptions').select('*');
+  const { title, body, session_id } = await req.json();
+  const { data: vk } = await admin.from('push_keys').select('*').eq('id', 1).maybeSingle();
+  if (!vk) return new Response('Push nicht eingerichtet', { status: 500, headers: cors });
+  webpush.setVapidDetails(vk.subject, vk.pub, vk.priv);
+  let q = admin.from('push_subscriptions').select('*');
+  if (session_id) {
+    // nur Eltern der Kinder, die zu diesem Training gehören
+    const { data: ses } = await admin.from('sessions').select('grp').eq('id', session_id).maybeSingle();
+    if (!ses) return new Response('Not found', { status: 404, headers: cors });
+    let kq = admin.from('kids').select('id').eq('active', true);
+    if (ses.grp === 'tue') kq = kq.eq('tue', true);
+    else if (ses.grp === 'fri') kq = kq.eq('fri', true);
+    else kq = kq.or('tue.eq.true,fri.eq.true');
+    const { data: kids } = await kq;
+    const { data: gs } = await admin.from('guardians').select('user_id').in('kid_id', (kids ?? []).map((k) => k.id));
+    q = q.in('user_id', [...new Set((gs ?? []).map((g) => g.user_id))]);
+  }
+  const { data: subs } = await q;
   let sent = 0;
   await Promise.all((subs ?? []).map(async (s) => {
     try {

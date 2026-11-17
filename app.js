@@ -205,6 +205,15 @@ async function loadDetail(id) {
   S.guests[id] = ok(await sb.from('session_guests').select('*').eq('session_id', id).order('created_at'));
 }
 
+function askModal(title, text, buttons) {
+  return new Promise((resolve) => {
+    const el = document.createElement('div'); el.className = 'modal';
+    el.innerHTML = `<div class="box"><h2>${esc(title)}</h2><p>${esc(text)}</p>${buttons.map(([v, l, c], i) => `<button class="${c === 'link' ? 'link' : 'btn big ' + (c === 'primary' ? '' : 'ghost')}" data-i="${i}">${esc(l)}</button>`).join('')}</div>`;
+    el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { el.remove(); resolve(buttons[+b.dataset.i][0]); } else if (e.target === el) { el.remove(); resolve(''); } });
+    document.body.appendChild(el);
+  });
+}
+
 /* ---------- Views ---------- */
 function render() {
   app.innerHTML = S.view === 'boot' ? '<p class="center muted">Lädt…</p>'
@@ -570,7 +579,25 @@ const A = {
   async attend(d, el) { ok(await sb.rpc('set_attended', { p_session: d.s, p_kid: d.k, p_attended: el.checked })); },
   async setGrp(d) { ok(await sb.from('sessions').update({ grp: d.v }).eq('id', d.s)); toast('Gespeichert'); await refreshSessions(); },
   async delGuest(d) { ok(await sb.from('session_guests').delete().eq('id', d.g)); await loadDetail(d.s); await refreshSessions(); },
-  async cancelSession(d) { ok(await sb.from('sessions').update({ cancelled: d.v === 'true' }).eq('id', d.s)); await refreshSessions(); },
+  async cancelSession(d) {
+    const cancel = d.v === 'true';
+    const ses = S.sessions.find((x) => x.id === d.s);
+    let push = false;
+    if (cancel) {
+      const choice = await askModal('Training absagen?', 'Möchtest du allen Kindern dieses Trainings eine Push-Benachrichtigung schicken?', [['push', 'Absagen und Push senden', 'primary'], ['only', 'Nur absagen', ''], ['', 'Zurück', 'link']]);
+      if (!choice) return;
+      push = choice === 'push';
+    }
+    ok(await sb.from('sessions').update({ cancelled: cancel }).eq('id', d.s));
+    if (push && ses) {
+      const when = `${new Date(ses.starts_at).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}, ${tm(ses.starts_at)} Uhr`;
+      const title = 'Training abgesagt', body = `Das Training am ${when} fällt aus.`;
+      await sb.from('messages').insert({ title, body, author: S.user.id });
+      const r = await sb.functions.invoke('send-push', { body: { title, body, session_id: ses.id } });
+      toast(r.error ? 'Abgesagt, Push konnte nicht gesendet werden' : `Abgesagt, Push an ${r.data?.sent ?? 0} Geräte gesendet`);
+    } else toast(cancel ? 'Training abgesagt' : 'Training wieder aktiv');
+    await refreshSessions();
+  },
   async deleteSession(d) { if (!confirm('Termin samt Anmeldungen löschen?')) return; ok(await sb.from('sessions').delete().eq('id', d.s)); S.open = null; await refreshSessions(); },
   async kidDay(d) {
     const k = S.allKids.find((x) => x.id === d.id);
