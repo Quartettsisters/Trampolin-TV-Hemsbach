@@ -27,6 +27,5 @@
       "purpose": "maskable"
     }
   ],
-  "id": "./",
-  "launch_handler": { "client_mode": ["navigate-existing", "auto"] }
+  "id": "./"
 }

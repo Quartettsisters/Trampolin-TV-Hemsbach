@@ -316,7 +316,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
 
 /* Zurück-Taste des Handys: geht in der App einen Schritt zurück statt sie zu schließen */
 let navKey = null, navApplying = false;
-const navSnap = () => ({ tab: S.tab, open: S.open, openKid: S.openKid, wlOpen: S.wlOpen, mail: S.mail.open || null });
+const SID = Math.random().toString(36).slice(2); // Kennung dieser App-Sitzung: fremde/alte Verlaufseinträge werden ignoriert
+const navSnap = () => ({ sid: SID, tab: S.tab, open: S.open, openKid: S.openKid, wlOpen: S.wlOpen, mail: S.mail.open || null });
 function navCheck() {
   if (S.view !== 'main') return;
   const snap = navSnap(), key = JSON.stringify(snap);
@@ -330,11 +331,13 @@ function render() {
 }
 window.addEventListener('popstate', (e) => {
   if (S.view !== 'main') return;
-  const st = e.state || { tab: 'termine', open: null, openKid: null, wlOpen: null, mail: null };
+  const own = e.state && e.state.sid === SID;
+  const st = own ? e.state : { tab: 'termine', open: null, openKid: null, wlOpen: null, mail: null };
   navApplying = true;
   S.tab = st.tab || 'termine'; S.open = st.open || null; S.openKid = st.openKid || null; S.wlOpen = st.wlOpen || null;
   if (!st.mail && S.mail.open) { S.mail.open = null; S.mail.thread = []; }
-  navKey = JSON.stringify({ tab: S.tab, open: S.open, openKid: S.openKid, wlOpen: S.wlOpen, mail: st.mail || null });
+  navKey = JSON.stringify({ sid: SID, tab: S.tab, open: S.open, openKid: S.openKid, wlOpen: S.wlOpen, mail: st.mail || null });
+  if (!own) history.replaceState({ sid: SID, tab: S.tab, open: null, openKid: null, wlOpen: null, mail: null }, '');
   Promise.resolve(st.mail ? A.mailOpen({ k: st.mail }) : null).then(() => { if (S.open) return loadDetail(S.open); }).catch(() => {}).finally(() => { render(); navApplying = false; });
 });
 function renderMain() {
