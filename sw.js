@@ -1,4 +1,4 @@
-const CACHE = 'tc-v13';
+const CACHE = 'tc-v14';
 const SHELL = ['./', './index.html', './app.js', './mail.js', './config.js', './style.css', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './badge-96.png'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
@@ -23,7 +23,8 @@ self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const go = e.notification.data;
   e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((l) => {
-    if (l[0]) { if (go) l[0].postMessage({ go }); return l[0].focus(); }
+    const mine = l.filter((c) => c.url.startsWith(self.registration.scope));
+    if (mine[0]) { if (go) mine[0].postMessage({ go }); return mine[0].focus(); }
     const q = go ? `?go=${encodeURIComponent(JSON.stringify(go))}` : '';
     return clients.openWindow(self.registration.scope + q);
   }));
