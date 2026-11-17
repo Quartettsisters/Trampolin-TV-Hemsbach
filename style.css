@@ -49,3 +49,11 @@ nav button span { display: block; font-size: 1.3rem; } nav button.on { color: va
 #install .btn { background: #d71920; } #install .link { color: #ccc; }
 #install .ico { display: inline-block; border: 1.5px solid #fff; border-radius: 4px; padding: 0 5px; font-weight: 700; }
 #app > .card, main { padding-top: 4px; }
+
+.mrow { border-top: 1px solid #eee; } .mrow:first-of-type { border-top: 0; }
+.mmain { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.avatar { flex: none; width: 46px; height: 46px; border-radius: 50%; background: #d9d6d6; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem; }
+.minfo { flex: 1; min-width: 0; } .msub { font-size: .8rem; color: var(--mut); display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; } .msub .warn { color: var(--bad); }
+.chev { color: #aaa; font-size: 1.4rem; } .mdetail { padding: 0 0 12px 58px; }
+.tag { display: inline-block; font-size: .72rem; font-weight: 700; color: #fff; padding: 2px 8px; border-radius: 6px; margin-left: 4px; vertical-align: middle; }
+.tag.tue { background: #1f9d55; } .tag.fri { background: #d71920; } .tag.tr { background: #3a7ab8; } .tag.gs { background: #e9a23b; } .tag.off { background: #9b9797; }

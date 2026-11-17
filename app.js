@@ -46,6 +46,7 @@ const S = {
   open: null, detail: {}, dayFilter: 'all',
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
   inviteCode: '', invites: [], invite: null, lastInvite: null,
+  activity: {}, openKid: null, kidFilter: 'all',
 };
 
 function toast(msg) {
@@ -148,6 +149,24 @@ async function loadAll() {
   ]);
   S.allKids = ok(k); S.waitlist = ok(w); S.inviteCode = c.data?.value || '';
   S.users = ok(u); S.roles = ok(r); S.invites = ok(inv);
+  await loadActivity();
+}
+
+// Aktivität: Anteil der letzten (bis zu 8) vergangenen Trainings der Gruppe des Kindes, auf die geantwortet wurde
+async function loadActivity() {
+  S.activity = {};
+  if (!can('registrations_view')) return;
+  const since = new Date(Date.now() - 120 * 864e5).toISOString();
+  const ses = ok(await sb.from('sessions').select('id,grp').eq('cancelled', false).lt('starts_at', new Date().toISOString()).gte('starts_at', since).order('starts_at', { ascending: false }));
+  if (!ses.length) return;
+  const regs = ok(await sb.from('registrations').select('kid_id,session_id').in('session_id', ses.map((x) => x.id)));
+  const answered = new Set(regs.map((r) => `${r.kid_id}|${r.session_id}`));
+  for (const k of S.allKids) {
+    const mine = ses.filter((x) => inGroup(k, x.grp)).slice(0, 8);
+    if (!mine.length) continue;
+    const rate = mine.filter((x) => answered.has(`${k.id}|${x.id}`)).length / mine.length;
+    S.activity[k.id] = rate >= 0.75 ? 'Hohe' : rate >= 0.4 ? 'Mittlere' : 'Geringe';
+  }
 }
 
 async function refreshSessions() {
@@ -205,7 +224,7 @@ function viewMain() {
     ['termine', '📅', 'Termine', true],
     ['neu', '➕', 'Neu', can('sessions_manage')],
     ['interessenten', '⏳', 'Warteliste', can('waitlist_view')],
-    ['kinder', '🤸', 'Kinder', can('kids_manage') || can('kids_view')],
+    ['kinder', '🤸', 'Mitglieder', can('kids_manage') || can('kids_view')],
     ['nutzer', '🔑', 'Nutzer', can('users_manage')],
     ['news', '💬', 'News', true],
     ['profil', '👤', 'Profil', true],
@@ -348,24 +367,41 @@ function viewUsers() {
     <p class="small muted">Die festen Rollen (Admin, Trainer, Eltern) lassen sich nicht ändern. Neue Rollen starten ohne Rechte.</p></div>`;
 }
 
+const avatar = (name) => `<span class="avatar">${esc((name || '?').trim()[0]?.toUpperCase())}</span>`;
+function kidTags(k) {
+  return `${k.tue ? '<span class="tag tue">Dienstag</span>' : ''}${k.fri ? '<span class="tag fri">Freitag</span>' : ''}${!k.active ? '<span class="tag off">Inaktiv</span>' : ''}`;
+}
 function viewKids() {
   const mg = can('kids_manage');
-  const act = S.allKids.filter((k) => k.active);
-  const tue = act.filter((k) => k.tue).length, fri = act.filter((k) => k.fri).length, both = act.filter((k) => k.tue && k.fri).length;
-  const days = (k) => `${k.tue ? '<span class="badge green">Di</span>' : ''}${k.fri ? '<span class="badge green">Fr</span>' : ''}${!k.tue && !k.fri ? '<span class="badge orange">Tag fehlt</span>' : ''}`;
-  const rows = S.allKids.map((k) => `<div class="kidrow"><div><b>${esc(k.name)}</b> ${days(k)} ${k.active ? '' : '<span class="badge gray">inaktiv</span>'}${mg ? `<br>
-    <span class="small muted">👤 ${S.guardCount[k.id] || 0} verknüpft${k.phone ? ' · ' : ''}${k.phone ? `<a href="tel:${esc(k.phone)}">📞 ${esc(k.phone)}</a>` : ''}</span>` : ''}</div>
-    ${mg ? `<div class="btns"><button class="chip ${k.tue ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="tue">Di</button><button class="chip ${k.fri ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="fri">Fr</button>
-    <button class="btn small ghost" data-a="kidPhone" data-id="${k.id}">Telefon</button>
-    <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Deaktivieren' : 'Aktivieren'}</button></div>` : ''}</div>`).join('');
+  const all = S.allKids;
+  const act = all.filter((k) => k.active);
+  const f = S.kidFilter;
+  const list = all.filter((k) => f === 'all' ? k.active : f === 'off' ? !k.active : k.active && k[f]);
+  const chips = [['all', `Alle (${act.length})`], ['tue', `Dienstag (${act.filter((k) => k.tue).length})`], ['fri', `Freitag (${act.filter((k) => k.fri).length})`], ['off', `Inaktiv (${all.length - act.length})`]]
+    .map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-a="kidFilter" data-v="${k}">${l}</button>`).join('');
+  const rows = list.map((k) => {
+    const g = S.guardCount[k.id] || 0;
+    const sub = [mg ? (g ? `<span>✓ Eltern verknüpft${g > 1 ? ` (${g})` : ''}</span>` : '<span>✕ Keine Eltern verknüpft</span>') : '',
+      S.activity[k.id] ? `<span>★ ${S.activity[k.id]} Aktivität</span>` : '',
+      !k.tue && !k.fri ? '<span class="warn">Trainingstag fehlt</span>' : ''].filter(Boolean).join(' ');
+    const open = mg && S.openKid === k.id;
+    return `<div class="mrow"><div class="mmain ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
+      <div class="minfo"><div><b>${esc(k.name)}</b> ${kidTags(k)}</div><div class="msub">${sub}</div></div>${mg ? '<span class="chev">›</span>' : ''}</div>
+      ${open ? `<div class="mdetail"><div class="btns"><button class="chip ${k.tue ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="tue">Dienstag</button><button class="chip ${k.fri ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="fri">Freitag</button></div>
+        <p class="small">${k.phone ? `<a href="tel:${esc(k.phone)}">📞 ${esc(k.phone)}</a>` : '<span class="muted">Keine Telefonnummer</span>'}</p>
+        <div class="btns"><button class="btn small ghost" data-a="kidPhone" data-id="${k.id}">Telefon ändern</button>
+        <button class="btn small ghost" data-a="kidActive" data-id="${k.id}" data-v="${!k.active}">${k.active ? 'Inaktiv setzen' : 'Wieder aktivieren'}</button></div></div>` : ''}</div>`;
+  }).join('') || '<p class="muted">Keine Einträge.</p>';
+  const staff = can('users_manage') ? S.users.filter((u) => (u.email || u.display_name) && S.roles.find((r) => r.id === u.role_id)?.name !== 'Eltern') : [];
+  const rtag = (n) => `<span class="tag ${n === 'Trainer' ? 'tr' : n === 'Geschäftsstelle' ? 'gs' : 'off'}">${esc(n)}</span>`;
+  const team = staff.length ? `<div class="card"><h2>Team</h2>${staff.map((u) => `<div class="mrow"><div class="mmain">${avatar(u.display_name || u.email)}<div class="minfo"><div><b>${esc(u.display_name || u.email)}</b> ${rtag(S.roles.find((r) => r.id === u.role_id)?.name || '')}</div></div></div></div>`).join('')}</div>` : '';
   const link = mg ? `<div class="card"><h2>Einladungslink für Eltern</h2><p class="small break">${esc(`${location.origin}${location.pathname}?c=${S.inviteCode}`)}</p>
     <div class="btns"><a class="btn" target="_blank" rel="noopener" href="${esc(`https://wa.me/?text=${encodeURIComponent(`Hallo! Hier ist die Trampolin-App vom TV Hemsbach. Link öffnen und dein Kind antippen, mehr ist nicht nötig:\n${location.origin}${location.pathname}?c=${S.inviteCode}`)}`)}">Per WhatsApp teilen</a>
     <button class="btn ghost" data-a="copyLink">Link kopieren</button><button class="btn ghost" data-a="rotate">Neuen Code erzeugen</button></div>
     <p class="small muted">Wer den Link hat, sieht die Vornamen der Kinder. Nur in der Gruppe teilen.</p></div>` : '';
-  const form = mg ? `<form data-f="newKid"><label>Name (z. B. „Mia K.“)<input name="name" required></label><label>Telefon (Notfall)<input name="phone" type="tel"></label>
-    <label class="line"><input type="checkbox" name="tue"> Dienstag</label><label class="line"><input type="checkbox" name="fri"> Freitag</label><button class="btn">Kind anlegen</button></form>` : '';
-  return `${link}<div class="card"><h2>Angemeldete Kinder: ${act.length}</h2>
-    <p class="small muted">Dienstag ${tue} · Freitag ${fri} · beide Tage ${both}</p>${rows || '<p class="muted">Noch keine.</p>'}${form}</div>`;
+  const form = mg ? `<details class="card"><summary>Neues Kind anlegen</summary><form data-f="newKid"><label>Name (z. B. „Mia K.“)<input name="name" required></label><label>Telefon (Notfall)<input name="phone" type="tel"></label>
+    <label class="line"><input type="checkbox" name="tue"> Dienstag</label><label class="line"><input type="checkbox" name="fri"> Freitag</label><button class="btn">Kind anlegen</button></form></details>` : '';
+  return `${link}${team}<div class="card"><h2>Kinder</h2><div class="chips">${chips}</div>${rows}</div>${form}`;
 }
 
 function viewNews() {
@@ -425,6 +461,8 @@ const A = {
     ok(await sb.from('kids').update({ [d.d]: !k[d.d] }).eq('id', d.id)); await loadAll(); render();
   },
   dayFilter(d) { S.dayFilter = d.v; render(); },
+  kidFilter(d) { S.kidFilter = d.v; render(); },
+  openKid(d) { S.openKid = S.openKid === d.id ? null : d.id; render(); },
   async kidActive(d) { ok(await sb.from('kids').update({ active: d.v === 'true' }).eq('id', d.id)); await loadAll(); render(); },
   async kidPhone(d) {
     const k = S.allKids.find((x) => x.id === d.id);
