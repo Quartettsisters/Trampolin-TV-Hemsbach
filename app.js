@@ -477,7 +477,7 @@ const waNumber = (p) => { let d = String(p || '').replace(/[^\d+]/g, ''); if (d.
 function inviteText(w, kind) {
   const inv = S.wlInv?.[w.id] || [];
   const fmtD = (x) => new Date(x).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' });
-  const fmtS = (x) => new Date(x).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + '.';
+  const fmtS = (x) => new Date(x).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   const wds = new Set(inv.map((x) => new Date(x).getDay()));
   const days = wds.size ? [...wds].map((d) => (d === 2 ? 'dienstags' : 'freitags')) : [w.tue && 'dienstags', w.fri && 'freitags'].filter(Boolean);
   const day = (days.length ? [...new Set(days)] : ['freitags']).join(' und ');
