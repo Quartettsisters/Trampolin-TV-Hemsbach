@@ -53,7 +53,7 @@ const S = {
   waitlist: [], wlFilter: 'waiting', wlQuery: '', importPreview: null,
   inviteCode: '', invites: [], invite: null, lastInvite: null,
   activity: {}, openKid: null, kidFilter: 'all', kidView: 'list',
-  termView: 'list', calMode: 'month', calMonth: { y: new Date().getFullYear(), m: new Date().getMonth() }, calWeek: mondayOf(new Date()), calDay: dkey(new Date()),
+  termView: 'list', showPast: false, calMode: 'month', calMonth: { y: new Date().getFullYear(), m: new Date().getMonth() }, calWeek: mondayOf(new Date()), calDay: dkey(new Date()),
 };
 
 function toast(msg) {
@@ -294,9 +294,14 @@ function viewTermineList() {
   const hint = parentHint(); if (hint) return hint;
   const tr = can('registrations_view');
   const chips = tr ? `<div class="chips">${[['all', 'Alle'], ['tue', 'Dienstag'], ['fri', 'Freitag']].map(([k, l]) => `<button class="chip ${S.dayFilter === k ? 'on' : ''}" data-a="dayFilter" data-v="${k}">${l}</button>`).join('')}</div>` : '';
-  const list = upcoming(visibleSessions()).filter((s) => !tr || S.dayFilter === 'all' || s.grp === S.dayFilter);
-  if (!list.length) return `${chips}<p class="muted center">Keine Termine.${can('sessions_manage') ? ' Lege unter „Neu“ welche an.' : ''}</p>`;
-  return chips + `<div class="list">${list.map(sessionCard).join('')}</div>`;
+  const past = S.showPast;
+  const vis = visibleSessions().filter((s) => !tr || S.dayFilter === 'all' || s.grp === S.dayFilter);
+  const up = upcoming(vis);
+  const list = past ? vis.filter((s) => !up.includes(s)).reverse() : up;
+  const pastBtn = `<div class="btns"><button class="link" data-a="showPast">${past ? '‹ Zurück zu kommenden Terminen' : 'Vergangene Termine anzeigen'}</button></div>`;
+  if (!list.length) return `${chips}<p class="muted center">Keine Termine.</p>${pastBtn}`;
+  if (false) return `${chips}<p class="muted center">Keine Termine.${can('sessions_manage') ? ' Lege unter „Neu“ welche an.' : ''}</p>`;
+  return chips + (past ? '<h3>Vergangene Termine</h3>' : '') + `<div class="list">${list.map(sessionCard).join('')}</div>` + pastBtn;
 }
 
 const bdaysOn = (d) => S.allKids.filter((k) => k.active && k.birthdate && new Date(k.birthdate).getMonth() === d.getMonth() && new Date(k.birthdate).getDate() === d.getDate());
@@ -547,6 +552,7 @@ const A = {
   dayFilter(d) { S.dayFilter = d.v; render(); },
   kidFilter(d) { S.kidFilter = d.v; render(); },
   kidView(d) { S.kidView = d.v; render(); },
+  showPast() { S.showPast = !S.showPast; S.open = null; render(); },
   termView(d) { S.termView = d.v; render(); },
   calMode(d) { S.calMode = d.v; render(); },
   calDay(d) { S.calDay = d.k; S.open = null; render(); },
