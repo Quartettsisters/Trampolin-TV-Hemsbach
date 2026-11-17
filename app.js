@@ -701,7 +701,9 @@ const A = {
     const ses = S.sessions.find((x) => x.id === d.s);
     let push = false;
     if (cancel) {
-      const choice = await askModal('Training absagen?', 'Möchtest du allen Kindern dieses Trainings eine Push-Benachrichtigung schicken?', [['push', 'Absagen und Push senden', 'primary'], ['only', 'Nur absagen', ''], ['', 'Zurück', 'link']]);
+      const gst = (S.guests[d.s] || []);
+      const warn = gst.length ? `Achtung: Für diesen Termin ${gst.length === 1 ? 'ist 1 Schnupperkind' : `sind ${gst.length} Schnupperkinder`} angemeldet (${gst.map((g) => g.name).join(', ')}). Die Eltern bekommen keine Push-Nachricht, bitte gib ihnen selbst Bescheid. ` : '';
+      const choice = await askModal(gst.length ? 'Schnupperkinder angemeldet!' : 'Training absagen?', warn + 'Möchtest du allen Kindern dieses Trainings eine Push-Benachrichtigung schicken?', [['push', 'Absagen und Push senden', 'primary'], ['only', 'Nur absagen', ''], ['', 'Zurück', 'link']]);
       if (!choice) return;
       push = choice === 'push';
     }
@@ -715,7 +717,7 @@ const A = {
     } else toast(cancel ? 'Training abgesagt' : 'Training wieder aktiv');
     await refreshSessions();
   },
-  async deleteSession(d) { if (!confirm('Termin samt Anmeldungen löschen?')) return; ok(await sb.from('sessions').delete().eq('id', d.s)); S.open = null; await refreshSessions(); },
+  async deleteSession(d) { const gst = (S.guests[d.s] || []); if (!confirm(gst.length ? `Achtung: Für diesen Termin ${gst.length === 1 ? 'ist 1 Schnupperkind' : `sind ${gst.length} Schnupperkinder`} angemeldet (${gst.map((g) => g.name).join(', ')}). Termin trotzdem samt Anmeldungen löschen?` : 'Termin samt Anmeldungen löschen?')) return; ok(await sb.from('sessions').delete().eq('id', d.s)); S.open = null; await refreshSessions(); },
   async kidDay(d) {
     const k = S.allKids.find((x) => x.id === d.id);
     ok(await sb.from('kids').update({ [d.d]: !k[d.d] }).eq('id', d.id)); await loadAll(); render();

@@ -422,3 +422,6 @@ end $$;
 revoke all on function public.confirm_guest(uuid) from public, anon;
 grant execute on function public.confirm_guest(uuid) to authenticated;
 -- (session_counts zählt nur bestätigte Schnupperkinder: ... and g.confirmed)
+
+-- Täglicher Trainer-Push um 16 Uhr (Edge Function daily-push, per pg_cron; Token in push_keys.cron_token)
+-- select cron.schedule('daily-trainer-push', '0 14,15 * * *', $$ select net.http_post(url := '<projekt-url>/functions/v1/daily-push', headers := jsonb_build_object('Content-Type','application/json','x-cron-token',(select cron_token from public.push_keys where id = 1)), body := '{}'::jsonb) $$);
