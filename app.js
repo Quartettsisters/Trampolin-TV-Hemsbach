@@ -330,7 +330,7 @@ function sessionHead(s) {
   const c = S.counts[s.id] || { going: 0 };
   const d = new Date(s.starts_at);
   const wd = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
-  return `<div class="srow${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
+  return `<div class="srow ${s.grp}${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
     <div class="sinfo"><div><b>${esc(s.title)}</b>${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}</div>
     <div class="muted small">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.grp === 'all' ? ' · Alle Gruppen' : ''}${s.location ? ' · ' + esc(s.location) : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div>
     ${can('registrations_view') ? `<div class="scount"><b>${c.going}</b><small>dabei</small></div>` : ''}</div>`;
@@ -401,7 +401,7 @@ function viewCalendar() {
     const first = new Date(y, m, 1), off = (first.getDay() + 6) % 7, total = Math.ceil((off + new Date(y, m + 1, 0).getDate()) / 7) * 7;
     const cells = Array.from({ length: total }, (_, i) => new Date(y, m, 1 - off + i)).map((d) => {
       const k = dkey(d);
-      const chips = (by[k] || []).map((s) => `<div class="cs${s.cancelled ? ' x' : ''}">${esc(s.title)}</div>`).join('');
+      const chips = (by[k] || []).map((s) => `<div class="cs ${s.grp}${s.cancelled ? ' x' : ''}">${esc(s.title)}</div>`).join('');
       const bd = bdaysOn(d).map((x) => `<div class="bd">${ic('cake')} ${esc(x.name.split(' ')[0])}</div>`).join('');
       return `<div class="cd ${d.getMonth() !== m ? 'oth' : ''} ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><span class="dn">${d.getDate()}</span>${chips}${bd}</div>`;
     }).join('');
@@ -409,7 +409,7 @@ function viewCalendar() {
   } else {
     grid = Array.from({ length: 7 }, (_, i) => new Date(wk0.getFullYear(), wk0.getMonth(), wk0.getDate() + i)).map((d) => {
       const k = dkey(d);
-      const ss = (by[k] || []).map((s) => `<div class="cs wide${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''} ${esc(s.title)} · ${DAY[s.grp]}${s.cancelled ? ' (abgesagt)' : ''}</div>`).join('');
+      const ss = (by[k] || []).map((s) => `<div class="cs wide ${s.grp}${s.cancelled ? ' x' : ''}">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''} ${esc(s.title)} · ${DAY[s.grp]}${s.cancelled ? ' (abgesagt)' : ''}</div>`).join('');
       const bd = bdaysOn(d).map((x) => `<div class="bd">${ic('cake')} ${esc(x.name)}</div>`).join('');
       return `<div class="wrow ${k === today ? 'today' : ''} ${k === S.calDay ? 'sel' : ''}" data-a="calDay" data-k="${k}"><b>${WD[(d.getDay() + 6) % 7]} ${d.getDate()}.${d.getMonth() + 1}.</b><div>${ss || '<span class="muted small">–</span>'}${bd}</div></div>`;
     }).join('');

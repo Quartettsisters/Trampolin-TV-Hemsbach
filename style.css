@@ -99,3 +99,9 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .modal .box.left { text-align: left; } .picklist { max-height: 45vh; overflow: auto; margin: 6px 0 10px; }
 
 .link.danger { color: var(--bad); }
+
+/* Dienstag grün, Freitag rot, beide Gruppen schwarz */
+.srow { border-left: 5px solid #999; } .srow.tue { border-left-color: var(--ok); } .srow.fri { border-left-color: var(--bad); } .srow.all { border-left-color: var(--ink); }
+.srow.tue .sdate b { color: #12913a; } .srow.fri .sdate b { color: var(--bad); }
+.cs.tue { background: #b5f0c6; } .cs.fri { background: #ffc2c2; } .cs.all { background: #cfd8d6; }
+.cs.x { background: #d4d9d8; }
