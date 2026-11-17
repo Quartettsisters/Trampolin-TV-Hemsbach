@@ -437,7 +437,7 @@ function sessionHead(s) {
   return `<div class="srow ${s.grp}${s.kind === 'event' ? ' event' : ''}${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
     <div class="sinfo"><div><b>${esc(s.title)}</b>${s.kind === 'event' ? ' <span class="badge blue">Termin</span>' : ''}${s.cancelled ? ' <span class="badge red">Abgesagt</span>' : ''}</div>
     <div class="muted small">${tm(s.starts_at)}${s.ends_at ? '–' + tm(s.ends_at) : ''}${s.grp === 'all' ? ' · Alle Gruppen' : ''}${s.location ? ' · ' + esc(s.location) : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div>
-    ${can('registrations_view') ? `<div class="scount"><b>${c.going}</b><small>dabei</small></div>` : ''}</div>`;
+    <div class="scount"><b>${c.going}</b><small>${can('registrations_view') ? 'dabei' : c.going === 1 ? 'Kind kommt' : 'Kinder kommen'}</small></div></div>`;
 }
 
 const upcoming = (list) => list.filter((s) => new Date(s.starts_at) >= new Date(Date.now() - 3 * 3600e3));
