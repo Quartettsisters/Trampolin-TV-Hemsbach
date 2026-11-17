@@ -492,7 +492,10 @@ TV Hemsbach`;
 Zum Training werden Socken/Schläppchen, Sportkleidung (elastische Hose ohne Bänder oder Reißverschlüsse), (bei langen Haaren) ein Haargummi und eine Trinkflasche benötigt.`;
   if (kind === 'trial') {
     const first = inv.length > 1 ? `Die ersten beiden Schnuppertrainings sind am ${inv.map(fmtS).join(' und am ')} möglich.` : inv.length ? `Ein erstes Schnuppertraining ist am ${fmtS(inv[0])} möglich.` : 'Ein erstes Schnuppertraining ist nach Absprache möglich.';
+    const intro = `wir freuen uns, euch ${inv.length === 1 ? 'einen Termin' : 'zwei Termine'} zum Schnuppern beim TV Hemsbach Trampolin anbieten zu können.`;
     return `Liebe Eltern,
+
+${intro}
 
 ${first}
 
