@@ -97,3 +97,5 @@ nav button span { display: block; font-size: 1.25rem; line-height: 1.2; } nav bu
 textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 
 .modal .box.left { text-align: left; } .picklist { max-height: 45vh; overflow: auto; margin: 6px 0 10px; }
+
+.link.danger { color: var(--bad); }
