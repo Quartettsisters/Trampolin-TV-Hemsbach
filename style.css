@@ -129,3 +129,14 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .wlnum { flex: none; min-width: 2em; height: 2em; padding: 0 .4em; margin-right: 10px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: #e3ecea; color: #14110f; font-weight: 700; font-size: .85rem; font-variant-numeric: tabular-nums; }
 
 .srow.event { border-left-color: #6b4fd8; } .srow.event .sdate b { color: #6b4fd8; } .badge.blue { background: #e7e1fb; color: #4a33a8; }
+
+/* Mitgliederliste: Zeile nach Trainingstag eingefärbt (Dienstag grün, Freitag rot, beides zweigeteilt) */
+.mmain.kg { padding: 10px 12px; margin: 6px 0; border-radius: 12px; color: #fff; background: #8d9895; }
+.mmain.kg-tue { background: var(--ok); } .mmain.kg-fri { background: var(--bad); }
+.mmain.kg-both { background: linear-gradient(90deg, var(--ok) 0 50%, var(--bad) 50% 100%); }
+.mmain.kg-off { background: #9aa3a1; }
+.mmain.kg b, .mmain.kg .msub, .mmain.kg .chev, .mmain.kg .msub .warn { color: #fff; }
+.mmain.kg .msub { font-size: .82rem; font-weight: 600; }
+.mmain.kg .tag { background: rgba(255,255,255,.26); border: 1px solid rgba(255,255,255,.85); color: #fff; }
+.mmain.kg .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+.mrow:has(.kg) { border-top: 0; }

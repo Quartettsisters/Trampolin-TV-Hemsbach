@@ -744,7 +744,7 @@ function viewKids() {
       S.activity[k.id] ? `<span>Zuletzt ${S.activity[k.id].n} von ${S.activity[k.id].m} Trainings da</span>` : '',
       !k.tue && !k.fri ? '<span class="warn">Trainingstag fehlt</span>' : ''].filter(Boolean).join(' ');
     const open = mg && S.openKid === k.id;
-    return `<div class="mrow"><div class="mmain ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
+    return `<div class="mrow"><div class="mmain kg ${!k.active ? 'kg-off' : k.tue && k.fri ? 'kg-both' : k.tue ? 'kg-tue' : k.fri ? 'kg-fri' : 'kg-none'} ${mg ? 'click' : ''}" ${mg ? `data-a="openKid" data-id="${k.id}"` : ''}>${avatar(k.name)}
       <div class="minfo"><div><b>${esc(k.name)}</b> ${kidTags(k)}</div><div class="msub">${sub}</div></div>${mg ? '<span class="chev">›</span>' : ''}</div>
       ${open ? `<div class="mdetail"><div class="btns"><button class="chip ${k.tue ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="tue">Dienstag</button><button class="chip ${k.fri ? 'on' : ''}" data-a="kidDay" data-id="${k.id}" data-d="fri">Freitag</button></div>
         <p class="small">${k.phone ? `${ic('phone')} ${phoneLinks(k)}` : '<span class="muted">Keine Telefonnummer</span>'}<br>${k.birthdate ? `${ic('cake')} ${fmtDate(k.birthdate)} (${ageOf(k.birthdate)} Jahre)` : '<span class="muted">Kein Geburtstag eingetragen</span>'}</p>
