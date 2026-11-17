@@ -270,10 +270,29 @@ function pickSessions(name) {
 }
 
 /* ---------- Views ---------- */
+/* Zurück-Taste des Handys: geht in der App einen Schritt zurück statt sie zu schließen */
+let navKey = null, navApplying = false;
+const navSnap = () => ({ tab: S.tab, open: S.open, openKid: S.openKid, wlOpen: S.wlOpen, mail: S.mail.open || null });
+function navCheck() {
+  if (S.view !== 'main') return;
+  const snap = navSnap(), key = JSON.stringify(snap);
+  if (navKey === null) history.replaceState(snap, '');
+  else if (key !== navKey && !navApplying) history.pushState(snap, '');
+  navKey = key;
+}
 function render() {
   renderMain();
-  if (S.view === 'main') MAIL.afterRender();
+  if (S.view === 'main') { MAIL.afterRender(); navCheck(); }
 }
+window.addEventListener('popstate', (e) => {
+  if (S.view !== 'main') return;
+  const st = e.state || { tab: 'termine', open: null, openKid: null, wlOpen: null, mail: null };
+  navApplying = true;
+  S.tab = st.tab || 'termine'; S.open = st.open || null; S.openKid = st.openKid || null; S.wlOpen = st.wlOpen || null;
+  if (!st.mail && S.mail.open) { S.mail.open = null; S.mail.thread = []; }
+  navKey = JSON.stringify({ tab: S.tab, open: S.open, openKid: S.openKid, wlOpen: S.wlOpen, mail: st.mail || null });
+  Promise.resolve(st.mail ? A.mailOpen({ k: st.mail }) : null).then(() => { if (S.open) return loadDetail(S.open); }).catch(() => {}).finally(() => { render(); navApplying = false; });
+});
 function renderMain() {
   app.innerHTML = S.view === 'boot' ? '<p class="center muted">Lädt…</p>'
     : S.view === 'waitform' ? viewWaitForm()
@@ -716,7 +735,7 @@ function viewProfile() {
 }
 
 /* ---------- Aktionen ---------- */
-const MAIL = initMail({ sb, S, esc, toast, can, render: () => render(), askModal, $, inviteText });
+const MAIL = initMail({ sb, S, esc, toast, can, render: () => render(), askModal, $, inviteText, onNav: () => navCheck() });
 
 const A = {
   ...MAIL.actions,

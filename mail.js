@@ -25,7 +25,7 @@ const P = {
 const ico = (n) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
 
 export function initMail(ctx) {
-  const { sb, S, esc, toast, can, render, askModal, $, inviteText } = ctx;
+  const { sb, S, esc, toast, can, render, askModal, $, inviteText, onNav } = ctx;
   const M = (S.mail = { folder: 'inbox', msgs: [], loaded: false, q: '', filter: 'all', open: null, thread: [], unread: 0, syncing: false, status: '', imgs: {}, expanded: {}, lastSync: 0, names: {}, me: null });
 
   /* ---------- Hilfen ---------- */
@@ -216,6 +216,7 @@ export function initMail(ctx) {
     M.open = key; M.thread = data || [];
     if (!keepScroll) { M.expanded = {}; window.scrollTo(0, 0); }
     paint();
+    if (!keepScroll) onNav?.();
     const unseen = M.thread.filter((m) => !m.seen).map((m) => m.id);
     if (unseen.length) {
       M.thread.forEach((m) => { if (!m.seen) m.seen = true; }); M.msgs.forEach((m) => { if (m.thread_key === key) m.seen = true; });
@@ -224,7 +225,7 @@ export function initMail(ctx) {
     }
   }
   const ids = () => M.thread.map((m) => m.id);
-  async function afterMove() { M.open = null; M.thread = []; await loadList(); paint(); sync(1); }
+  async function afterMove() { M.open = null; M.thread = []; await loadList(); paint(); onNav?.(); sync(1); }
 
   /* ---------- Schreiben ---------- */
   const signature = () => `Mit sportlichen Grüßen,\n${M.me || 'das Trampolin-Team'}\nTrampolin TV Hemsbach`;
@@ -307,7 +308,7 @@ export function initMail(ctx) {
     mailFilter(d) { M.filter = d.f; paint(); },
     async mailRefresh() { M.lastSync = 0; await sync(); },
     async mailOpen(d) { await openThread(d.k); },
-    mailBack() { M.open = null; M.thread = []; paint(); window.scrollTo(0, M.listY || 0); },
+    mailBack() { if (history.state?.mail) { history.back(); return; } M.open = null; M.thread = []; paint(); window.scrollTo(0, M.listY || 0); onNav?.(); },
     mailToggle(d) { const m = find(d.id); const cur = M.expanded[d.id] ?? M.thread.indexOf(m) === M.thread.length - 1; M.expanded[d.id] = !cur; paint(); },
     mailImgs(d) { M.imgs[d.id] = true; paint(); },
     async mailAtt(d, el) {
