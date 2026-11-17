@@ -172,6 +172,12 @@ async function loadAll() {
     sb.from('roles').select('*').order('name'),
     can('users_manage') ? sb.from('staff_invites').select('*').is('used_at', null).gt('expires_at', new Date().toISOString()).order('expires_at') : none,
   ]);
+  S.wlInv = {};
+  if (can('registrations_view') && can('waitlist_view')) {
+    const gq = await sb.from('session_guests').select('waitlist_id, sessions(starts_at)').not('waitlist_id', 'is', null);
+    (gq.data || []).forEach((x) => { if (x.sessions) (S.wlInv[x.waitlist_id] ||= []).push(x.sessions.starts_at); });
+    Object.values(S.wlInv).forEach((a) => a.sort());
+  }
   S.allKids = ok(k); S.waitlist = ok(w); S.inviteCode = c.data?.value || '';
   S.users = ok(u); S.roles = ok(r); S.invites = ok(inv);
   await loadActivity();
@@ -210,6 +216,27 @@ function askModal(title, text, buttons) {
     const el = document.createElement('div'); el.className = 'modal';
     el.innerHTML = `<div class="box"><h2>${esc(title)}</h2><p>${esc(text)}</p>${buttons.map(([v, l, c], i) => `<button class="${c === 'link' ? 'link' : 'btn big ' + (c === 'primary' ? '' : 'ghost')}" data-i="${i}">${esc(l)}</button>`).join('')}</div>`;
     el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { el.remove(); resolve(buttons[+b.dataset.i][0]); } else if (e.target === el) { el.remove(); resolve(''); } });
+    document.body.appendChild(el);
+  });
+}
+
+function pickSessions(name) {
+  const list = S.sessions.filter((x) => !x.cancelled && new Date(x.starts_at) > new Date()).slice(0, 16);
+  return new Promise((resolve) => {
+    const el = document.createElement('div'); el.className = 'modal';
+    el.innerHTML = `<div class="box left"><h2>Einladung für ${esc(name)}</h2><p>Zu welchen beiden Terminen wird das Kind eingeladen?</p>
+      <div class="picklist">${list.map((x) => `<label class="line"><input type="checkbox" value="${x.id}"> ${esc(fmt(x.starts_at))} Uhr · ${esc(DAY[x.grp])}</label>`).join('') || '<p class="muted">Keine kommenden Termine.</p>'}</div>
+      <button class="btn big" data-ok disabled>Einladen</button><button class="link" data-no>Abbrechen</button></div>`;
+    const okb = el.querySelector('[data-ok]');
+    el.addEventListener('change', (e) => {
+      const on = [...el.querySelectorAll('input:checked')];
+      if (on.length > 2) { e.target.checked = false; toast('Maximal zwei Termine'); return; }
+      okb.disabled = on.length === 0; okb.textContent = on.length === 2 ? 'Zu 2 Terminen einladen' : on.length === 1 ? 'Zu 1 Termin einladen' : 'Einladen';
+    });
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('[data-ok]')) { const ids = [...el.querySelectorAll('input:checked')].map((i) => i.value); el.remove(); resolve(ids); }
+      else if (e.target.closest('[data-no]') || e.target === el) { el.remove(); resolve(null); }
+    });
     document.body.appendChild(el);
   });
 }
@@ -429,6 +456,7 @@ function wlList() {
     const open = S.wlOpen === w.id;
     const head = `<div class="mmain click" data-a="wlOpen" data-id="${w.id}" style="padding:12px 14px"><div class="minfo"><b>${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}</b>${w.birthdate ? `<span class="muted"> · ${ageOf(w.birthdate)} J.</span>` : ''}${w.trial ? ' <span class="badge green">Schnuppern</span>' : ''}</div><div>${tag(w)}</div><span class="chev">${open ? '‹' : '›'}</span></div>`;
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
+      ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
       ${can('waitlist_manage') ? `<label>Notiz<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}</p>` : '')}
       ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
@@ -676,7 +704,20 @@ const A = {
   },
   wlFilter(d) { S.wlFilter = d.v; render(); },
   wlOpen(d) { S.wlOpen = S.wlOpen === d.id ? null : d.id; render(); },
-  async wlStatus(d, el) { ok(await sb.from('waitlist').update({ status: el.value }).eq('id', d.id)); await loadAll(); render(); },
+  async wlStatus(d, el) {
+    const w = S.waitlist.find((x) => x.id === d.id);
+    if (el.value === 'invited' && w?.status !== 'invited') {
+      const ids = await pickSessions([w.first_name, w.last_name].filter(Boolean).join(' '));
+      if (!ids) { render(); return; }
+      if (can('registrations_manage')) {
+        ok(await sb.from('session_guests').insert(ids.map((id) => ({ session_id: id, name: [w.first_name, w.last_name].filter(Boolean).join(' '), waitlist_id: w.id }))));
+      }
+      const first = S.sessions.filter((x) => ids.includes(x.id)).map((x) => x.starts_at).sort()[0];
+      ok(await sb.from('waitlist').update({ status: 'invited', trial: true, trial_on: first ? dkey(first) : null }).eq('id', d.id));
+      toast('Eingeladen, als Schnupperkind eingetragen');
+    } else ok(await sb.from('waitlist').update({ status: el.value }).eq('id', d.id));
+    await loadAll(); render();
+  },
   async wlNote(d, el) {
     const v = el.value.trim() || null;
     ok(await sb.from('waitlist').update({ note: v }).eq('id', d.id));
