@@ -457,6 +457,12 @@ function wlFiltered() {
     (!q || `${w.first_name} ${w.last_name} ${w.email} ${w.phone}`.toLowerCase().includes(q)))
     .sort((a, b) => (a.requested_on || '9999').localeCompare(b.requested_on || '9999') || String(a.created_at).localeCompare(String(b.created_at)));
 }
+const waNumber = (p) => { let d = String(p || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (d.startsWith('0')) return '49' + d.slice(1); return d.length >= 10 ? d : '49' + d; };
+function inviteText(w) {
+  const name = w.first_name, dates = (S.wlInv?.[w.id] || []).map((x) => new Date(x).toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr');
+  const when = dates.length ? `zum Schnuppertraining am ${dates.join(' oder am ')}` : 'zum Schnuppertraining';
+  return `Hallo, hier ist die Trampolin-Abteilung des TV Hemsbach. Wir haben einen Platz frei und laden ${name} ${when} in die Halle ein (jeweils 17:30–20:00 Uhr). Bitte gebt kurz Bescheid, ob es klappt. Viele Grüße`;
+}
 function wlList() {
   const list = wlFiltered();
   if (!list.length) return '<p class="muted center">Keine Einträge.</p>';
@@ -467,6 +473,7 @@ function wlList() {
     const det = !open ? '' : `<div class="sdetail"><p class="small muted" style="margin:8px 0">angefragt: ${esc(w.requested || '–')}${w.requested_again ? ' · erneut: ' + esc(w.requested_again) : ''}${w.contacted_at ? ' · angeschrieben: ' + fmtDate(w.contacted_at) : ''}${w.birthdate ? ' · geboren: ' + fmtDate(w.birthdate) : ''}</p>
       ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
+      ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w))}">Einladung per WhatsApp</a>` : ''}${w.email ? `<a class="btn small ghost" href="mailto:${esc(w.email)}?subject=${encodeURIComponent('Schnuppertraining Trampolin TV Hemsbach')}&body=${encodeURIComponent(inviteText(w))}">Einladung per Mail</a>` : ''}</div>` : ''}
       ${can('waitlist_manage') ? `<label>Notiz<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}</p>` : '')}
       ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
         ${can('kids_manage') ? `<button class="btn small" data-a="wlAccept" data-id="${w.id}">Als Teilnehmer anlegen</button>` : ''}</div>` : ''}</div>`;
