@@ -137,7 +137,7 @@ export function initMail(ctx) {
       const remote = /<img[^>]+src=["']?https?:/i.test(m.body_html) || /url\(\s*['"]?https?:/i.test(m.body_html);
       const allow = !!M.imgs[m.id];
       const clean = m.body_html.replace(/<meta[^>]*http-equiv=["']?refresh[^>]*>/gi, '');
-      const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: ${allow ? 'https: http:' : ''}; style-src 'unsafe-inline'"><base target="_blank"><style>html,body{margin:0}body{font:15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#111;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}a{color:#0b5a47}</style></head><body>${clean}</body></html>`;
+      const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: ${allow ? 'https: http:' : ''}; style-src 'unsafe-inline'"><base target="_blank"><style>html,body{margin:0}body{font:15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#111;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}a{color:#3a2f28}</style></head><body>${clean}</body></html>`;
       return `${remote && !allow ? `<div class="note small">Externe Bilder sind blockiert (Datenschutz). <button class="link" data-a="mailImgs" data-id="${m.id}">Bilder laden</button></div>` : ''}<iframe class="mbody" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcdoc="${esc(doc)}"></iframe>`;
     }
     return `<div class="mtext">${linkify(m.body_text)}</div>`;
