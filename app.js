@@ -131,6 +131,7 @@ async function init() {
   if (p.get('go')) { try { S.pendingGo = JSON.parse(p.get('go')); } catch { /* egal */ } history.replaceState(null, '', location.pathname + (p.get('c') ? `?c=${p.get('c')}` : '')); }
   const { data: { session } } = await sb.auth.getSession();
   if (session) { S.user = session.user; await afterLogin(); }
+  else if (p.get('admin')) S.view = 'login';
   else if (S.code) { await loadOverview(); S.view = 'pick'; }
   else S.view = 'login';
   if (p.get('i')) { S.invite = p.get('i'); S.view = 'invite'; }
@@ -386,8 +387,7 @@ function viewPick() {
     <h2>Deine E-Mail-Adresse</h2>
     <p>Bitte trage zuerst deine E-Mail-Adresse ein. Sie dient nur dazu, dein Konto deinem Kind zuzuordnen. Danach wählst du dein Kind.</p>
     <form data-f="parentEmail"><label>E-Mail-Adresse <span class="req">*</span><input name="email" type="email" required autocomplete="email" value="${esc(S.parentEmail || '')}"></label>
-    <button class="btn big">Weiter</button></form>
-    <button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button></div>`;
+    <button class="btn big">Weiter</button></form></div>`;
   }
   const kids = S.overview.map((k) => `<button class="kidbtn" data-a="pickKid" data-id="${esc(k.id)}" data-name="${esc(k.name)}">${esc(k.name)}</button>`).join('');
   return `<div class="card"><h1>Willkommen</h1>
@@ -396,7 +396,7 @@ function viewPick() {
     ${S.overviewError ? `<p class="err">${esc(S.overviewError)}</p>` : `<div class="kidlist">${kids}</div>`}
     <p class="muted small">Dein Kind fehlt? Dann hat es vielleicht schon ein anderes Elternteil gewählt. Bitte melde dich bei den Trainern, sie können es freigeben. Jedes Kind kann nur einmal gewählt werden.</p>
     <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst. Weitere Kinder kannst du später hinzufügen.</p>
-    ${S.user ? '<button class="btn big ghost" data-a="cancelPick">Abbrechen</button>' : '<button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button>'}</div>`;
+    ${S.user ? '<button class="btn big ghost" data-a="cancelPick">Abbrechen</button>' : ''}</div>`;
 }
 
 function viewLogin() {
