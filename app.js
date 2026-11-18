@@ -384,7 +384,7 @@ function viewPick() {
   if (!hasMail) {
     return `<div class="card"><h1>Willkommen</h1>
     <h2>Deine E-Mail-Adresse</h2>
-    <p>Bitte trage zuerst deine E-Mail-Adresse ein. Das Trainerteam nutzt sie, um dich zu erreichen. Danach wählst du dein Kind.</p>
+    <p>Bitte trage zuerst deine E-Mail-Adresse ein. Sie dient nur dazu, dein Konto deinem Kind zuzuordnen. Danach wählst du dein Kind.</p>
     <form data-f="parentEmail"><label>E-Mail-Adresse <span class="req">*</span><input name="email" type="email" required autocomplete="email" value="${esc(S.parentEmail || '')}"></label>
     <button class="btn big">Weiter</button></form>
     <button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button></div>`;
