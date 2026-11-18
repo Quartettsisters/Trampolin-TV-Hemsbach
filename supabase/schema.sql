@@ -453,3 +453,8 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 -- kid_photos: 192x192-JPEG als Data-URL (max. 80 KB), Einwilligung beim Hochladen (consent_at).
 -- Lesen: Trainer (kids_manage/registrations_view) und Eltern des Kindes. Schreiben/Löschen nur über set_kid_photo / clear_kid_photo
 -- (Eltern des Kindes oder kids_manage).
+
+-- ---------- Notiz-Zeitpunkt & Geburtstags-Push ----------
+-- waitlist.note_at wird per Trigger waitlist_note_stamp bei jeder Notiz-Änderung gesetzt.
+-- Edge Function birthday-push (verify_jwt=false, x-cron-token): pg_cron 'birthday-push' ('0 6,7 * * *' UTC, prüft 08 Uhr Europe/Berlin);
+-- Push an Rollen mit registrations_view, wenn ein aktives Kind Geburtstag hat (29.2. -> 28.2. in Nicht-Schaltjahren).

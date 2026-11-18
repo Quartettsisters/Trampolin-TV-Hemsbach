@@ -690,7 +690,13 @@ function wlList() {
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
       ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<button class="btn small" data-a="waInvite" data-id="${w.id}">WhatsApp</button>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="trial">Mail senden</button>` : ''}</div>${can('registrations_manage') ? `<button class="link" data-a="wlDates" data-id="${w.id}">${S.wlInv?.[w.id]?.length ? 'Termine ändern' : 'Termine festlegen'}</button>` : ''}${w.trial_done ? `<div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="offer">Mail senden</button>` : ''}</div>` : '<p class="small muted" style="margin-top:8px">Platzangebot erst möglich, wenn das Kind beim Schnuppern war.</p>'}` : ''}
       ${can('waitlist_manage') ? `<label class="line"><input type="checkbox" data-a="trialDone" data-id="${w.id}" ${w.trial_done ? 'checked' : ''}> War beim Schnuppern da</label>` : ''}
-      ${can('waitlist_manage') ? `<label>Notiz<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}</p>` : '')}
+      ${can('waitlist_manage') ? `<label>Notiz${w.note && w.note_at ? ` <span class="muted small">· vom ${esc(fmt(w.note_at))} Uhr</span>` : ''}<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}${w.note_at ? `<br><span class="muted small">vom ${esc(fmt(w.note_at))} Uhr</span>` : ''}</p>` : '')}
+      ${can('waitlist_manage') ? `<details class="kidedit"><summary>Daten bearbeiten</summary><form data-f="editWl"><input type="hidden" name="id" value="${w.id}">
+        <label>Vorname<input name="first_name" value="${esc(w.first_name || '')}" required></label><label>Nachname<input name="last_name" value="${esc(w.last_name || '')}"></label>
+        <label>Geburtsdatum<input name="birthdate" type="date" value="${esc(w.birthdate || '')}"></label><label>E-Mail<input name="email" type="email" value="${esc(w.email || '')}"></label>
+        <label>Telefon<input name="phone" type="tel" value="${esc(w.phone || '')}"></label>
+        <label>Angefragt (Monat)<input name="requested_on" type="month" value="${esc(w.requested_on ? String(w.requested_on).slice(0, 7) : '')}"></label>
+        <button class="btn">Speichern</button></form></details>` : ''}
       ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
         ${can('kids_manage') ? `<button class="btn small" data-a="wlAccept" data-id="${w.id}">Als Teilnehmer anlegen</button>` : ''}</div>` : ''}</div>`;
     return `<div class="scard">${head}${det}</div>`;
@@ -1064,7 +1070,7 @@ const A = {
   async wlNote(d, el) {
     const v = el.value.trim() || null;
     ok(await sb.from('waitlist').update({ note: v }).eq('id', d.id));
-    const w = S.waitlist.find((x) => x.id === d.id); if (w) w.note = v;
+    const w = S.waitlist.find((x) => x.id === d.id); if (w && w.note !== v) { w.note = v; w.note_at = v ? new Date().toISOString() : null; }
     toast('Notiz gespeichert');
   },
 
@@ -1157,6 +1163,13 @@ const F = {
     await loadAll(); render();
   },
   async newRole(f) { ok(await sb.from('roles').insert({ name: f.name.trim(), perms: {} })); await loadAll(); render(); toast('Rolle angelegt – Rechte darunter setzen'); },
+  async editWl(f) {
+    const row = { first_name: f.first_name.trim(), last_name: f.last_name?.trim() || null, birthdate: f.birthdate || null, email: f.email?.trim() || null, phone: f.phone?.trim() || null, requested_on: f.requested_on ? f.requested_on + '-01' : null };
+    const old = S.waitlist.find((x) => x.id === f.id);
+    if (row.requested_on && String(old?.requested_on || '').slice(0, 7) !== f.requested_on) row.requested = new Date(row.requested_on).toLocaleDateString('de-DE', { month: 'long', year: '2-digit' }).replace(' ', "'");
+    ok(await sb.from('waitlist').update(row).eq('id', f.id));
+    Object.assign(S.waitlist.find((x) => x.id === f.id) || {}, row); render(); toast('Gespeichert');
+  },
   async newKid(f) { ok(await sb.from('kids').insert({ name: f.name.trim(), phone: f.phone || null, birthdate: f.birthdate || null, tue: f.tue === 'on', fri: f.fri === 'on' })); await loadAll(); render(); },
   async newMsg(f) {
     ok(await sb.from('messages').insert({ title: f.title, body: f.body, author: S.user.id }));
