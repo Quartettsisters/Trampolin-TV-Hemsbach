@@ -456,7 +456,7 @@ function sessionCardParent(s) {
     const badge = st === 'going' ? '<span class="badge green">Dabei</span>'
       : st === 'open' ? '<span class="badge gray">Noch offen</span>' : '<span class="badge red">Abgesagt</span>';
     const btns = s.cancelled ? '' : `<div class="btns">
-      <button class="btn ${st === 'going' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">Zusagen</button>
+      <button class="btn ${st === 'going' ? 'on' : 'ghost'}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="yes">Zusagen</button>
       <button class="btn ghost ${st === 'declined' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="no">Absagen</button></div>`;
     return `<div class="kidrow"><div><b>${esc(k.name)}</b> ${badge}</div>${btns}</div>`;
   }).join('');
