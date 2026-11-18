@@ -148,3 +148,7 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 
 .monthsep { margin: 14px 2px 2px; padding: 0 0 4px; font-weight: 700; font-size: .95rem; color: var(--ink); border-bottom: 2px solid var(--tue); letter-spacing: .02em; }
 .list > .monthsep:first-child { margin-top: 4px; }
+
+.sact { border-top: 1px solid #e6e0da; margin-top: 16px; padding-top: 12px; }
+.btn.ghost.danger { color: var(--bad); border-color: var(--bad); }
+.pastebtn { display: block; font-size: .85rem; font-weight: 600; padding: 4px 0 0; }
