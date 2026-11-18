@@ -688,7 +688,7 @@ function wlList() {
       ${S.wlInv?.[w.id]?.length ? `<p class="small"><b>Eingeladen zu:</b> ${S.wlInv[w.id].map((x) => esc(fmt(x))).join(' und ')} Uhr</p>` : ''}
       ${can('waitlist_manage') ? `<div class="btns"><button class="chip ${w.tue ? 'on' : ''}" data-a="wlDay" data-id="${w.id}" data-d="tue">Dienstag</button><button class="chip ${w.fri ? 'on' : ''}" data-a="wlDay" data-id="${w.id}" data-d="fri">Freitag</button></div>` : ''}
       <div class="small">${w.email ? `<a href="mailto:${esc(w.email)}">${ic('mail')} ${esc(w.email)}</a><br>` : ''}${w.phone ? `<a href="tel:${esc(w.phone)}">${ic('phone')} ${esc(w.phone)}</a>` : ''}</div>
-      ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="trial">Mail senden</button>` : ''}</div>${w.trial_done ? `<div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="offer">Mail senden</button>` : ''}</div>` : '<p class="small muted" style="margin-top:8px">Platzangebot erst möglich, wenn das Kind beim Schnuppern war.</p>'}` : ''}
+      ${can('waitlist_manage') && (w.email || w.phone) ? `<div class="small muted" style="margin-top:8px">Einladung zum Schnuppern</div><div class="btns">${w.phone ? `<button class="btn small" data-a="waInvite" data-id="${w.id}">WhatsApp</button>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="trial">Mail senden</button>` : ''}</div>${can('registrations_manage') ? `<button class="link" data-a="wlDates" data-id="${w.id}">${S.wlInv?.[w.id]?.length ? 'Termine ändern' : 'Termine festlegen'}</button>` : ''}${w.trial_done ? `<div class="small muted" style="margin-top:8px">Platzangebot</div><div class="btns">${w.phone ? `<a class="btn small" target="_blank" rel="noopener" href="https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'offer'))}">WhatsApp</a>` : ''}${w.email ? `<button class="btn small ghost" data-a="mailCompose" data-id="${w.id}" data-k="offer">Mail senden</button>` : ''}</div>` : '<p class="small muted" style="margin-top:8px">Platzangebot erst möglich, wenn das Kind beim Schnuppern war.</p>'}` : ''}
       ${can('waitlist_manage') ? `<label class="line"><input type="checkbox" data-a="trialDone" data-id="${w.id}" ${w.trial_done ? 'checked' : ''}> War beim Schnuppern da</label>` : ''}
       ${can('waitlist_manage') ? `<label>Notiz<textarea rows="4" data-a="wlNote" data-id="${w.id}" placeholder="Hier tippen, wird automatisch gespeichert">${esc(w.note || '')}</textarea></label>` : (w.note ? `<p class="note">${esc(w.note)}</p>` : '')}
       ${can('waitlist_manage') ? `<div class="btns"><select data-a="wlStatus" data-id="${w.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${w.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
@@ -873,7 +873,25 @@ const A = {
   },
   async setGrp(d) { ok(await sb.from('sessions').update({ grp: d.v }).eq('id', d.s)); toast('Gespeichert'); await refreshSessions(); },
   async guestAttend(d, el) { ok(await sb.rpc('set_guest_attended', { p_guest: d.g, p_attended: el.checked })); toast(el.checked ? 'Als anwesend vermerkt' : 'Vermerk entfernt'); await loadAll(); },
-  async trialDone(d, el) { ok(await sb.from('waitlist').update({ trial_done: el.checked }).eq('id', d.id)); await loadAll(); render(); },
+  async trialDone(d, el) {
+    const patch = { trial_done: el.checked };
+    // Häkchen entfernt und kein Schnuppertermin mehr offen: auch das Schnuppern-Kennzeichen entfernen
+    if (!el.checked && !(S.wlInv?.[d.id]?.length)) { patch.trial = false; patch.trial_on = null; }
+    ok(await sb.from('waitlist').update(patch).eq('id', d.id)); await loadAll(); render();
+  },
+  async waInvite(d) {
+    let w = S.waitlist.find((x) => x.id === d.id); if (!w?.phone) return;
+    if (!(S.wlInv?.[w.id]?.length)) {
+      // Erst Termine festlegen, damit der Text die Termine nennt
+      if (!(await inviteFlow(w))) return;
+      await loadAll(); w = S.waitlist.find((x) => x.id === d.id); render();
+    }
+    window.open(`https://wa.me/${waNumber(w.phone)}?text=${encodeURIComponent(inviteText(w, 'trial'))}`, '_blank', 'noopener');
+  },
+  async wlDates(d) {
+    const w = S.waitlist.find((x) => x.id === d.id); if (!w) return;
+    if (await inviteFlow(w)) { await loadAll(); render(); }
+  },
   async confirmGuest(d) { ok(await sb.rpc('confirm_guest', { p_guest: d.g })); toast('Schnupperkind eingetragen'); await loadDetail(d.s); await refreshSessions(); },
   async withdrawInvite(d) {
     if (!confirm('Einladung zurücknehmen? Das Kind wird bei allen Schnupperterminen ausgetragen.')) return;
