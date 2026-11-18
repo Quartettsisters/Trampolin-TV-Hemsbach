@@ -396,7 +396,7 @@ function viewPick() {
     ${S.overviewError ? `<p class="err">${esc(S.overviewError)}</p>` : `<div class="kidlist">${kids}</div>`}
     <p class="muted small">Dein Kind fehlt? Dann hat es vielleicht schon ein anderes Elternteil gewählt. Bitte melde dich bei den Trainern, sie können es freigeben. Jedes Kind kann nur einmal gewählt werden.</p>
     <p class="muted small">Tipp: Steht oben „Als App installieren“, mach das zuerst. Weitere Kinder kannst du später hinzufügen.</p>
-    <button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button></div>`;
+    ${S.user ? '<button class="btn big ghost" data-a="cancelPick">Abbrechen</button>' : '<button class="link" data-a="toLogin">Anmeldung mit E-Mail (Admin)</button>'}</div>`;
 }
 
 function viewLogin() {
@@ -840,6 +840,7 @@ const A = {
     S.invite = null; await afterLogin(); S.tab = 'termine'; render(); toast(`Willkommen im Team (${role})`);
   },
   async delInvite(d) { ok(await sb.from('staff_invites').delete().eq('id', d.id)); await loadAll(); render(); },
+  cancelPick() { S.view = 'main'; S.tab = 'profil'; render(); },
   changeParentMail() { S.parentEmail = ''; render(); },
   async pickKid(d) {
     if (!confirm(`„${d.name}“ wählen?\n\nEin Kind kann nur einmal gewählt werden. Falls du dich vertippst, können nur die Trainer das wieder freigeben.`)) return;

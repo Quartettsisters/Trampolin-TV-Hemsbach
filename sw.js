@@ -1,4 +1,4 @@
-const CACHE = 'tc-v26';
+const CACHE = 'tc-v27';
 const SHELL = ['./', './index.html', './app.js', './mail.js', './config.js', './style.css', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './badge-96.png'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
