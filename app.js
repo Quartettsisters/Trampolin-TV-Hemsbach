@@ -492,7 +492,7 @@ function viewTermineList() {
       if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, label: d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }), items: [] });
       groups[groups.length - 1].items.push(x);
     });
-    return groups.map((g) => `<div class="monthbar">${esc(g.label)}</div><div class="list">${g.items.map(sessionCard).join('')}</div>`).join('');
+    return groups.map((g) => `<div class="monthbar">${esc(g.label)}</div><div class="list tlist">${g.items.map(sessionCard).join('')}</div>`).join('');
   })() + pastBtn;
 }
 
