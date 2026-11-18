@@ -559,6 +559,7 @@ function detailTrainer(s) {
       <label>Datum<input name="date" type="date" value="${dkey(s.starts_at)}" required></label>
       <label>Beginn<input name="start" type="time" value="${tm(s.starts_at)}" required></label><label>Ende (optional)<input name="end" type="time" value="${s.ends_at ? tm(s.ends_at) : ''}"></label>
       <label>Ort<input name="location" value="${esc(s.location || '')}"></label>
+      <label class="line"><input type="checkbox" name="signup" ${s.signup ? 'checked' : ''}> Anmeldung nötig (Kinder müssen zusagen, sonst sind sie nicht dabei)</label>
       <div class="btns"><button class="btn small">Speichern</button><button type="button" class="btn small ghost" data-a="editSession" data-s="${s.id}">Abbrechen</button></div></form>`
     : `<button class="btn small ghost" style="margin-top:10px" data-a="editSession" data-s="${s.id}">Termin bearbeiten (Titel, Zeit, Ort)</button>`;
   const guestBox = `<div class="sh"><span>Schnupperkinder</span><b>${gl.length}</b></div>
@@ -582,7 +583,7 @@ function viewNew() {
     <label class="line"><input type="checkbox" name="skipXmas" checked> Baden-Württembergische Weihnachtsferien auslassen (23.12.–09.01.)</label>
     <button class="btn big">Anlegen</button></form></div>
     <div class="card"><h2>Sondertermin</h2><p class="small muted">Für Wettkämpfe, Feiern, Zusatztrainings oder andere Tage.</p><form data-f="newSession">
-    <label>Art<select name="kind"><option value="event">Wettkampf / Veranstaltung (Eltern melden an)</option><option value="training">Zusatztraining (alle Kinder der Gruppe dabei)</option></select></label>
+    <label>Art<select name="kind"><option value="event">Wettkampf / Veranstaltung (Eltern melden an)</option><option value="training">Zusatztraining (alle Kinder der Gruppe dabei)</option><option value="signup">Training mit Anmeldung, z. B. Ferien (Kinder müssen zusagen)</option></select></label>
     <label>Titel<input name="title" placeholder="z. B. Wettkampf in Mannheim" required></label>
     <label>Für wen<select name="grp"><option value="all">Beide Gruppen</option><option value="tue">Nur Dienstag-Gruppe</option><option value="fri">Nur Freitag-Gruppe</option></select></label>
     <label>Datum<input name="date" type="date" required></label>
@@ -1107,7 +1108,7 @@ const A = {
 const F = {
   async saveSession(f) {
     const title = f.title.trim(); if (!title) throw new Error('Bitte einen Titel eingeben.');
-    ok(await sb.from('sessions').update({ title, location: f.location?.trim() || null,
+    ok(await sb.from('sessions').update({ title, location: f.location?.trim() || null, signup: f.signup === 'on',
       starts_at: new Date(`${f.date}T${f.start}`).toISOString(), ends_at: f.end ? new Date(`${f.date}T${f.end}`).toISOString() : null }).eq('id', f.id));
     S.editSess = null; await refreshSessions(); toast('Termin gespeichert');
   },
@@ -1166,8 +1167,8 @@ const F = {
     S.tab = 'termine'; await refreshSessions(); toast(`${rows.length} Trainings angelegt${skipped ? `, ${skipped} in den Weihnachtsferien ausgelassen` : ''}`);
   },
   async newSession(f) {
-    const ev = f.kind === 'event';
-    ok(await sb.from('sessions').insert({ title: f.title.trim(), grp: f.grp, location: f.location || null, note: f.note?.trim() || null, kind: ev ? 'event' : 'training', signup: ev,
+    const ev = f.kind === 'event', su = ev || f.kind === 'signup';
+    ok(await sb.from('sessions').insert({ title: f.title.trim(), grp: f.grp, location: f.location || null, note: f.note?.trim() || null, kind: ev ? 'event' : 'training', signup: su,
       starts_at: new Date(`${f.date}T${f.start}`).toISOString(), ends_at: f.end ? new Date(`${f.date}T${f.end}`).toISOString() : null }));
     S.tab = 'termine'; await refreshSessions(); toast('Termin angelegt');
   },
