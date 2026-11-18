@@ -485,7 +485,11 @@ function viewTermineList() {
   const pastBtn = `<div class="btns"><button class="link" data-a="showPast">${past ? '‹ Zurück zu kommenden Terminen' : 'Vergangene Termine anzeigen'}</button></div>`;
   if (!list.length) return `${chips}<p class="muted center">Keine Termine.</p>${pastBtn}`;
   if (false) return `${chips}<p class="muted center">Keine Termine.${can('sessions_manage') ? ' Lege unter „Neu“ welche an.' : ''}</p>`;
-  return chips + (past ? '<h3>Vergangene Termine</h3>' : '') + `<div class="list">${list.map(sessionCard).join('')}</div>` + pastBtn;
+  return chips + (past ? '<h3>Vergangene Termine</h3>' : '') + `<div class="list">${list.map((s, i) => {
+    const d = new Date(s.starts_at), key = d.getFullYear() * 12 + d.getMonth(), pd = i ? new Date(list[i - 1].starts_at) : null;
+    const head = !pd || pd.getFullYear() * 12 + pd.getMonth() !== key ? `<div class="monthsep">${esc(d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }))}</div>` : '';
+    return head + sessionCard(s);
+  }).join('')}</div>` + pastBtn;
 }
 
 const bdaysOn = (d) => S.allKids.filter((k) => k.active && k.birthdate && new Date(k.birthdate).getMonth() === d.getMonth() && new Date(k.birthdate).getDate() === d.getDate());

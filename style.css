@@ -145,3 +145,6 @@ textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
 .pphoto { display: flex; align-items: center; gap: 12px; } .pphoto .avatar { width: 64px; height: 64px; flex: none; } .pphoto .btn { margin-top: 6px; }
 
 .badge.trial { background: #2f80c9; color: #fff; }
+
+.monthsep { margin: 14px 2px 2px; padding: 0 0 4px; font-weight: 700; font-size: .95rem; color: var(--ink); border-bottom: 2px solid var(--tue); letter-spacing: .02em; }
+.list > .monthsep:first-child { margin-top: 4px; }
