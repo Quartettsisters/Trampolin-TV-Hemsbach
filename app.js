@@ -874,8 +874,9 @@ const A = {
   async pasteInto(d, el) {
     const ta = el.previousElementSibling?.querySelector('textarea'); if (!ta) return;
     let txt = '';
-    try { txt = await navigator.clipboard.readText(); } catch { throw new Error('Zwischenablage nicht freigegeben. Bitte im Browser „Einfügen“ erlauben.'); }
-    if (!txt) throw new Error('Zwischenablage ist leer.');
+    try { txt = await navigator.clipboard.readText(); } catch {}
+    if (!txt) txt = prompt('Text hier einfügen (lange auf das Feld drücken → Einfügen):') || '';
+    if (!txt) return;
     const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
     ta.value = ta.value.slice(0, a) + txt + ta.value.slice(b); ta.focus();
     ta.dispatchEvent(new Event('input', { bubbles: true }));
