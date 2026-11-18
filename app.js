@@ -434,7 +434,7 @@ function viewMain() {
 }
 
 function sessionHead(s) {
-  const c = S.counts[s.id] || { going: 0 };
+  const c = s.cancelled ? { going: 0 } : (S.counts[s.id] || { going: 0 });
   const d = new Date(s.starts_at);
   const wd = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
   return `<div class="srow ${s.grp}${s.kind === 'event' ? ' event' : ''}${s.cancelled ? ' x' : ''}"><div class="sdate"><small>${wd}</small><b>${d.getDate()}.${d.getMonth() + 1}.</b></div>
@@ -452,7 +452,7 @@ function visibleSessions() {
 function sessionCardParent(s) {
   const rows = S.myKids.filter((k) => inGroup(k, s.grp)).map((k) => {
     const r = S.regs.find((x) => x.session_id === s.id && x.kid_id === k.id);
-    const st = r?.status || (s.signup ? 'open' : 'going');
+    const st = s.cancelled ? 'declined' : (r?.status || (s.signup ? 'open' : 'going'));
     const badge = st === 'going' ? '<span class="badge green">Dabei</span>'
       : st === 'open' ? '<span class="badge gray">Noch offen</span>' : '<span class="badge red">Abgesagt</span>';
     const btns = s.cancelled ? '' : `<div class="btns">
@@ -542,11 +542,13 @@ function detailTrainer(s) {
   const mg = can('registrations_manage'), att = can('attendance_manage') && new Date(s.starts_at) <= new Date();
   const kids = S.allKids.filter((k) => k.active && inGroup(k, s.grp));
   const reg = (k) => regs.find((r) => r.kid_id === k.id);
-  const out = kids.filter((k) => reg(k)?.status === 'declined');
-  const inn = kids.filter((k) => (s.signup ? reg(k)?.status === 'going' : reg(k)?.status !== 'declined'));
-  const open = s.signup ? kids.filter((k) => !reg(k)) : [];
-  const btn = (k, v, on, ic) => `<button class="rb ${on ? (v === 'yes' ? 'yes' : 'no') : ''}" ${mg ? `data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="${v}"` : 'disabled'}>${ic}</button>`;
-  const row = (k, going, pending) => `<div class="prow">${avatar(k.id)}<span class="pn">${esc(k.name)}</span>
+  // Abgesagtes Training: alle erscheinen als abgesagt, die gespeicherten Antworten bleiben unverändert (beim Reaktivieren wieder wie vorher)
+  const out = s.cancelled ? kids : kids.filter((k) => reg(k)?.status === 'declined');
+  const inn = s.cancelled ? [] : kids.filter((k) => (s.signup ? reg(k)?.status === 'going' : reg(k)?.status !== 'declined'));
+  const open = s.signup && !s.cancelled ? kids.filter((k) => !reg(k)) : [];
+  const was = (k) => { const st = reg(k)?.status; return st === 'declined' ? 'hatte abgesagt' : st === 'going' || !s.signup ? 'hatte zugesagt' : 'ohne Antwort'; };
+  const btn = (k, v, on, ic) => `<button class="rb ${on ? (v === 'yes' ? 'yes' : 'no') : ''}" ${mg && !s.cancelled ? `data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="${v}"` : 'disabled'}>${ic}</button>`;
+  const row = (k, going, pending) => `<div class="prow">${avatar(k.id)}<span class="pn">${esc(k.name)}${s.cancelled ? ` <span class="muted small">· ${was(k)}</span>` : ''}</span>
     ${going && att ? `<label class="att"><input type="checkbox" data-a="attend" data-s="${s.id}" data-k="${k.id}" ${reg(k)?.attended ? 'checked' : ''}> da</label>` : ''}
     ${btn(k, 'yes', going, ic('check'))}${btn(k, 'no', !going && !pending, ic('x'))}</div>`;
   const manage = can('sessions_manage') ? `<div class="btns sact"><button class="btn small ghost" data-a="editSession" data-s="${s.id}">Bearbeiten</button><button class="btn small ghost" data-a="setGrp" data-s="${s.id}" data-v="${s.grp === 'all' ? (new Date(s.starts_at).getDay() === 5 ? 'fri' : 'tue') : 'all'}">${s.grp === 'all' ? 'Nur ' + (new Date(s.starts_at).getDay() === 5 ? 'Freitag' : 'Dienstag') : 'Für beide Gruppen öffnen'}</button><button class="btn small ghost" data-a="cancelSession" data-s="${s.id}" data-v="${!s.cancelled}">${s.cancelled ? 'Wieder aktivieren' : 'Absagen'}</button><button class="btn small ghost danger" data-a="deleteSession" data-s="${s.id}">Löschen</button></div>` : '';
@@ -569,7 +571,7 @@ function detailTrainer(s) {
       <datalist id="wl-${s.id}">${wl.map((w) => `<option value="${esc([w.first_name, w.last_name].filter(Boolean).join(' '))}">`).join('')}</datalist><button class="btn">+</button></form>` : ''}`;
   return `<div class="sdetail">
     <div class="sh"><span>${s.signup ? 'Zugesagt (Anmeldung nötig)' : 'Zugesagt'}</span><b>${inn.length}</b></div>${inn.map((k) => row(k, true)).join('') || '<p class="muted small">Niemand</p>'}
-    <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}
+    <div class="sh"><span>Abgesagt</span><b>${out.length}</b></div>${s.cancelled ? '<p class="muted small">Training abgesagt. Die bisherigen Antworten bleiben gespeichert und gelten wieder, wenn du es reaktivierst.</p>' : ''}${out.map((k) => row(k, false)).join('') || '<p class="muted small">Niemand</p>'}
     ${s.signup ? `<div class="sh"><span>Noch keine Antwort</span><b>${open.length}</b></div>${open.map((k) => row(k, false, true)).join('') || '<p class="muted small">Niemand</p>'}` : ''}${guestBox}${noteBox}${editBox}${manage}</div>`;
 }
 
