@@ -1186,7 +1186,7 @@ const F = {
 
 app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-a]');
-  if (!el || el.tagName === 'SELECT' || el.type === 'checkbox') return;
+  if (!el || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.type === 'checkbox') return;
   const fn = A[el.dataset.a]; if (fn) run(() => fn(el.dataset, el));
 });
 app.addEventListener('change', (e) => {
@@ -1194,7 +1194,10 @@ app.addEventListener('change', (e) => {
   if (el.id === 'xl' && el.files[0]) return run(() => readExcel(el.files[0]));
   if (el.dataset?.a && (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.type === 'checkbox')) run(() => A[el.dataset.a](el.dataset, el));
 });
+let noteTimer;
 app.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.tagName === 'TEXTAREA' && t.dataset?.a && A[t.dataset.a]) { clearTimeout(noteTimer); noteTimer = setTimeout(() => run(() => A[t.dataset.a](t.dataset, t)), 1500); }
   if (e.target.id === 'mailq') return MAIL.search(e.target.value);
   if (e.target.id === 'wlq') { S.wlQuery = e.target.value; $('#wl-list').innerHTML = wlList(); }
 });
