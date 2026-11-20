@@ -157,6 +157,8 @@ async function afterLogin() {
   await loadAll();
   S.view = 'main';
   MAIL.start();
+  // Wenn Benachrichtigungen schon erlaubt sind: Registrierung bei jedem Start still erneuern (heilt gelöschte Einträge)
+  if ('Notification' in window && Notification.permission === 'granted') setTimeout(() => A.push({}, null, true).catch(() => {}), 1500);
   if (S.pendingGo) { const g = S.pendingGo; S.pendingGo = null; setTimeout(() => run(() => openGo(g)), 0); }
   if (!can('registrations_view') && !S.myKids.length) S.tab = 'profil';
 }
@@ -1036,16 +1038,17 @@ const A = {
     if (!S.user.email && !confirm('Wirklich abmelden? Danach brauchst du den Einladungslink erneut' + (S.roleName === 'Eltern' ? '.' : ' (neue Einladung vom Admin).'))) return;
     await sb.auth.signOut(); location.reload();
   },
-  async push() {
+  async push(d, el, silent) {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return toast('Dieses Gerät unterstützt keine Push-Nachrichten.');
     if (!VAPID_PUBLIC_KEY) return toast('Push ist noch nicht eingerichtet.');
+    if (silent && Notification.permission !== 'granted') return;
     if ((await Notification.requestPermission()) !== 'granted') return toast('Nicht erlaubt');
     const reg = await navigator.serviceWorker.ready;
     const key = Uint8Array.from(atob(VAPID_PUBLIC_KEY.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
     const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const j = sub.toJSON();
     ok(await sb.from('push_subscriptions').upsert({ user_id: S.user.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' }));
-    toast('Benachrichtigungen aktiv');
+    if (!silent) toast('Benachrichtigungen aktiv');
   },
   async setRole(d, el) { ok(await sb.rpc('set_user_role', { p_user: d.u, p_role: el.value })); await loadAll(); render(); toast('Rolle geändert'); },
   async togglePerm(d, el) {
