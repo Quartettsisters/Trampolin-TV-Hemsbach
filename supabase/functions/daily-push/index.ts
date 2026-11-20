@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
   const { data: subs } = await admin.from('push_subscriptions').select('*').in('user_id', staff);
   webpush.setVapidDetails(vk.subject, vk.pub, vk.priv);
 
-  let sent = 0;
+  let sent = 0; const errors: any[] = [];
   for (const s of todays) {
     const n = (cnt ?? []).find((c: any) => c.session_id === s.id)?.going ?? 0;
     const time = new Date(s.starts_at).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
@@ -36,9 +36,12 @@ Deno.serve(async (req) => {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
         sent++;
       } catch (e) {
+        errors.push({ status: e.statusCode ?? null, msg: String(e.body ?? e.message ?? e).slice(0, 120) });
         if (e.statusCode === 404 || e.statusCode === 410) await admin.from('push_subscriptions').delete().eq('id', sub.id);
       }
     }));
   }
-  return new Response(JSON.stringify({ sessions: todays.length, sent }));
+  const res = { sessions: todays.length, staff: staff.length, subs: (subs ?? []).length, sent, errors };
+  console.log('daily-push', JSON.stringify(res));
+  return new Response(JSON.stringify(res));
 });
