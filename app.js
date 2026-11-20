@@ -133,7 +133,7 @@ async function init() {
   if (session) { S.user = session.user; await afterLogin(); }
   else if (p.get('admin')) S.view = 'login';
   else if (S.code) { await loadOverview(); S.view = 'pick'; }
-  else S.view = 'login';
+  else S.view = 'code';
   if (p.get('i')) { S.invite = p.get('i'); S.view = 'invite'; }
   render(); renderInstall();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -344,6 +344,7 @@ window.addEventListener('popstate', (e) => {
 function renderMain() {
   app.innerHTML = S.view === 'boot' ? '<p class="center muted">Lädt…</p>'
     : S.view === 'waitform' ? viewWaitForm()
+    : S.view === 'code' ? viewCodeEntry()
     : S.view === 'invite' ? viewInvite()
     : S.view === 'pick' ? viewPick()
     : S.view === 'login' ? viewLogin()
@@ -353,6 +354,14 @@ function renderMain() {
 function viewMore() {
   const row = (t, i, l) => `<button class="mrow-btn" data-a="tab" data-t="${t}"><span>${i}</span>${l}<em>›</em></button>`;
   return `<div class="list">${can('sessions_manage') ? row('neu', ic('plus'), 'Trainings anlegen') : ''}${can('users_manage') ? row('nutzer', ic('key'), 'Team & Rollen') : ''}${row('profil', ic('user'), 'Mein Profil')}</div>`;
+}
+
+function viewCodeEntry() {
+  return `<div class="card"><h1>Willkommen</h1>
+    <p>Bitte füge hier den Einladungslink (oder den Code daraus) ein, den du von den Trainern bekommen hast.</p>
+    <form data-f="codeEntry"><label>Link oder Code<input name="code" required autocomplete="off" autocapitalize="off" placeholder="https://…?c=…"></label>
+    <button class="btn big">Weiter</button></form>
+    <p class="muted small">Tipp: Den Link findest du in der Nachricht der Trainer. Kopiere ihn dort und füge ihn hier ein.</p></div>`;
 }
 
 function viewWaitForm() {
@@ -1184,6 +1193,16 @@ const F = {
     await loadAll(); render();
   },
   async newRole(f) { ok(await sb.from('roles').insert({ name: f.name.trim(), perms: {} })); await loadAll(); render(); toast('Rolle angelegt – Rechte darunter setzen'); },
+  async codeEntry(f) {
+    let v = f.code.trim();
+    if (v.toLowerCase() === 'admin') { S.login = { step: 'email', email: '', kid: null }; S.view = 'login'; render(); return; }
+    try { v = new URL(v).searchParams.get('c') || v; } catch { /* kein Link, dann gilt der Text selbst als Code */ }
+    v = v.replace(/[^A-Za-z0-9_-]/g, '');
+    if (!v) throw new Error('Bitte den Link oder Code einfügen.');
+    S.code = v; await loadOverview();
+    if (S.overviewError) { S.code = null; throw new Error('Der Link oder Code stimmt nicht. Bitte prüfe ihn oder melde dich bei den Trainern.'); }
+    localStorage.setItem('tc_code', v); S.view = 'pick'; render();
+  },
   async editWl(f) {
     const row = { first_name: f.first_name.trim(), last_name: f.last_name?.trim() || null, birthdate: f.birthdate || null, email: f.email?.trim() || null, phone: f.phone?.trim() || null, requested_on: f.requested_on ? f.requested_on + '-01' : null };
     const old = S.waitlist.find((x) => x.id === f.id);
