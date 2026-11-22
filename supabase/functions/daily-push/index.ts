@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({ title: 'Training heute', body: `Heute ${time} Uhr: ${n} ${n === 1 ? 'Kind' : 'Kinder'} gemeldet.`, data: { go: 'session', id: s.id } });
     await Promise.all((subs ?? []).map(async (sub: any) => {
       try {
-        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { urgency: 'high', TTL: 3600 });
         sent++;
       } catch (e) {
         errors.push({ status: e.statusCode ?? null, msg: String(e.body ?? e.message ?? e).slice(0, 120) });

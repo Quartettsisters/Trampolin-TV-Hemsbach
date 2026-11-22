@@ -165,7 +165,7 @@ async function pushNew(admin: any, fresh: any[], exceptUser: string | null) {
     data: { go: 'mail', k: one ? fresh[0].thread_key : null },
   });
   await Promise.all((subs ?? []).map(async (s: any) => {
-    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload); }
+    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { urgency: 'high', TTL: 3600 }); }
     catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await admin.from('push_subscriptions').delete().eq('id', s.id); }
   }));
 }
