@@ -142,7 +142,15 @@ async function init() {
 async function loadOverview() {
   const { data, error } = await sb.rpc('kids_overview', { p_code: S.code });
   S.overview = data || [];
-  S.overviewError = error ? error.message : (S.overview.length ? '' : 'Der Link ist ungültig oder abgelaufen, oder es ist kein freies Kind mehr übrig. Bitte melde dich bei den Trainern.');
+  await loadAgain();
+  S.overviewError = error ? error.message : (S.overview.length || S.again.length ? '' : 'Der Link ist ungültig oder abgelaufen, oder es ist kein freies Kind mehr übrig. Bitte melde dich bei den Trainern.');
+}
+// Kinder, die schon mit dieser E-Mail-Adresse verknüpft sind (z. B. im Browser), dürfen in der installierten App erneut gewählt werden
+async function loadAgain() {
+  S.again = [];
+  if (!S.code || !/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(S.parentEmail || '')) return;
+  const { data } = await sb.rpc('kids_by_email', { p_code: S.code, p_email: S.parentEmail });
+  S.again = data || [];
 }
 
 async function afterLogin() {
@@ -400,7 +408,9 @@ function viewPick() {
     <form data-f="parentEmail"><label>E-Mail-Adresse <span class="req">*</span><input name="email" type="email" required autocomplete="email" value="${esc(S.parentEmail || '')}"></label>
     <button class="btn big">Weiter</button></form></div>`;
   }
-  const kids = S.overview.map((k) => `<button class="kidbtn" data-a="pickKid" data-id="${esc(k.id)}" data-name="${esc(k.name)}">${esc(k.name)}</button>`).join('');
+  const seen = new Set((S.again || []).map((k) => k.id));
+  const btn = (k, again) => `<button class="kidbtn" data-a="pickKid" data-id="${esc(k.id)}" data-name="${esc(k.name)}">${esc(k.name)}${again ? ' <span class="muted small">· schon mit dieser E-Mail verknüpft</span>' : ''}</button>`;
+  const kids = (S.again || []).map((k) => btn(k, true)).join('') + S.overview.filter((k) => !seen.has(k.id)).map((k) => btn(k, false)).join('');
   return `<div class="card"><h1>Willkommen</h1>
     <h2>Wer ist dein Kind?</h2>
     <p class="small muted">E-Mail: ${esc(S.parentEmail)} · <button class="link" data-a="changeParentMail">ändern</button></p>
@@ -1133,7 +1143,8 @@ const F = {
   async parentEmail(f) {
     const e = f.email.trim().toLowerCase();
     if (!/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(e)) throw new Error('Bitte eine gültige E-Mail-Adresse eingeben.');
-    S.parentEmail = e; localStorage.setItem('tc_email', e); render();
+    S.parentEmail = e; localStorage.setItem('tc_email', e); await loadAgain();
+    S.overviewError = S.overview.length || S.again.length ? '' : S.overviewError; render();
   },
   async myKid(f) {
     ok(await sb.rpc('update_my_kid', { p_kid: f.id, p_phone: f.phone || '', p_birthdate: f.birth || null, p_email: f.email }));
@@ -1203,7 +1214,6 @@ const F = {
     v = v.replace(/[^A-Za-z0-9_-]/g, '');
     if (!v) throw new Error('Bitte den Link oder Code einfügen.');
     S.code = v; await loadOverview();
-    if (S.overviewError) { S.code = null; throw new Error('Der Link oder Code stimmt nicht. Bitte prüfe ihn oder melde dich bei den Trainern.'); }
     localStorage.setItem('tc_code', v); S.view = 'pick'; render();
   },
   async editWl(f) {

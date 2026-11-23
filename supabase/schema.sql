@@ -458,3 +458,6 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 -- waitlist.note_at wird per Trigger waitlist_note_stamp bei jeder Notiz-Änderung gesetzt.
 -- Edge Function birthday-push (verify_jwt=false, x-cron-token): pg_cron 'birthday-push' ('0 6,7 * * *' UTC, prüft 08 Uhr Europe/Berlin);
 -- Push an Rollen mit registrations_view, wenn ein aktives Kind Geburtstag hat (29.2. -> 28.2. in Nicht-Schaltjahren).
+
+-- ---------- Gleiche E-Mail: Kind auf neuem Gerät erneut wählen ----------
+-- kids_by_email(p_code, p_email) liefert Kinder, die schon mit dieser E-Mail verknüpft sind; claim_kid erlaubt dann eine weitere Verknüpfung (z. B. installierte App nach Browser-Anmeldung).
