@@ -470,8 +470,8 @@ function visibleSessions() {
   return S.sessions.filter((s) => S.myKids.some((k) => inGroup(k, s.grp)));
 }
 
-function sessionCardParent(s) {
-  const rows = S.myKids.filter((k) => inGroup(k, s.grp)).map((k) => {
+function ownKidRows(s) {
+  return S.myKids.filter((k) => inGroup(k, s.grp)).map((k) => {
     const r = S.regs.find((x) => x.session_id === s.id && x.kid_id === k.id);
     const st = s.cancelled ? 'declined' : (r?.status || (s.signup ? 'open' : 'going'));
     const badge = st === 'going' ? '<span class="badge green">Dabei</span>'
@@ -481,10 +481,14 @@ function sessionCardParent(s) {
       <button class="btn ghost ${st === 'declined' ? 'on' : ''}" data-a="answer" data-s="${s.id}" data-k="${k.id}" data-v="no">Absagen</button></div>`;
     return `<div class="kidrow"><div><b>${esc(k.name)}</b> ${badge}</div>${btns}</div>`;
   }).join('');
-  return `<div class="scard">${sessionHead(s)}${rows}</div>`;
+}
+function sessionCardParent(s) {
+  return `<div class="scard">${sessionHead(s)}${ownKidRows(s)}</div>`;
 }
 function sessionCardTrainer(s) {
-  return `<div class="scard"><div data-a="toggle" data-s="${s.id}" class="click">${sessionHead(s)}</div>${S.open === s.id ? detailTrainer(s) : ''}</div>`;
+  // Trainer ohne Recht zum Ein-/Austragen (z. B. Junior-Trainer) können ihr eigenes Kind selbst zu- und absagen
+  const own = can('registrations_manage') ? '' : ownKidRows(s);
+  return `<div class="scard"><div data-a="toggle" data-s="${s.id}" class="click">${sessionHead(s)}</div>${S.open === s.id ? detailTrainer(s) : ''}${own}</div>`;
 }
 const sessionCard = (s) => (can('registrations_view') ? sessionCardTrainer(s) : sessionCardParent(s));
 
