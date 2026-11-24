@@ -461,3 +461,5 @@ grant execute on function public.confirm_guest(uuid) to authenticated;
 
 -- ---------- Gleiche E-Mail: Kind auf neuem Gerät erneut wählen ----------
 -- kids_by_email(p_code, p_email) liefert Kinder, die schon mit dieser E-Mail verknüpft sind; claim_kid erlaubt dann eine weitere Verknüpfung (z. B. installierte App nach Browser-Anmeldung).
+
+-- guardian_kids(): für Team & Rollen (users_manage) – Kindernamen je Eltern-Konto

@@ -207,7 +207,9 @@ async function loadAll() {
     (ml.data || []).forEach((m) => { (S.mailLog[m.waitlist_id] ||= []).push(m); });
   }
   S.allKids = ok(k); S.waitlist = ok(w); S.inviteCode = c.data?.value || '';
-  S.users = ok(u); S.roles = ok(r); S.invites = ok(inv);
+  S.users = ok(u); S.roles = ok(r);
+  S.gkids = {};
+  if (can('users_manage')) { const gk = await sb.rpc('guardian_kids'); (gk.data || []).forEach((x) => { S.gkids[x.user_id] = x.kids; }); } S.invites = ok(inv);
   await loadActivity();
   await loadPhotos();
 }
@@ -765,8 +767,8 @@ function viewWaitlist() {
 
 function viewUsers() {
   const roleOpts = (cur) => S.roles.map((r) => `<option value="${r.id}" ${r.id === cur ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
-  const named = S.users.filter((u) => u.email || u.display_name);
-  const users = named.map((u) => `<div class="kidrow"><div><b class="break">${esc(u.display_name || u.email)}</b>${u.display_name && u.email ? `<br><span class="small muted">${esc(u.email)}</span>` : ''}${u.id === S.user.id ? ' <span class="badge gray">du</span>' : ''}</div>
+  const named = S.users.filter((u) => u.email || u.display_name || S.gkids?.[u.id]);
+  const users = named.map((u) => `<div class="kidrow"><div><b class="break">${esc(u.display_name || u.email || (S.gkids?.[u.id] ? `Eltern von ${S.gkids[u.id]}` : ''))}</b>${u.display_name && u.email ? `<br><span class="small muted">${esc(u.email)}</span>` : ''}${u.display_name && S.gkids?.[u.id] ? `<br><span class="small muted">Eltern von ${esc(S.gkids[u.id])}</span>` : ''}${u.id === S.user.id ? ' <span class="badge gray">du</span>' : ''}</div>
     <select data-a="setRole" data-u="${u.id}" ${u.id === S.user.id ? 'disabled' : ''}>${roleOpts(u.role_id)}</select></div>`).join('') || '<p class="muted">Noch niemand.</p>';
   const anon = S.users.length - named.length;
   const inviteRoles = S.roles.filter((r) => !['Admin', 'Eltern'].includes(r.name));
@@ -783,7 +785,7 @@ function viewUsers() {
     <button class="btn">Einladungslink erzeugen</button></form>${last}
     ${open ? `<h3>Offene Einladungen</h3>${open}` : ''}
     <p class="small muted">Der Link gilt 7 Tage und nur für eine Person. Er gibt die gewählte Rolle, deshalb nicht weiterleiten.</p></div>
-    <h2>Team & Rollen</h2><div class="card">${users}<p class="small muted">Dazu ${anon} Eltern-Geräte (über den Einladungslink, ohne Mail). Handy verloren? Rolle auf „Eltern“ stellen und neu einladen.</p></div>
+    <h2>Team & Rollen</h2><div class="card">${users}<p class="small muted">Dazu ${anon} Geräte ohne Namen und ohne Kind (z. B. nur geöffnet, nicht angemeldet). Handy verloren? Rolle auf „Eltern“ stellen und neu einladen.</p></div>
     <h2>Rollen und ihre Rechte</h2>${roles}
     <div class="card"><form data-f="newRole"><label>Neue Rolle<input name="name" placeholder="z. B. Übungsleiter" required></label><button class="btn">Rolle anlegen</button></form>
     <p class="small muted">Die festen Rollen (Admin, Trainer, Eltern) lassen sich nicht ändern. Neue Rollen starten ohne Rechte.</p></div>`;
